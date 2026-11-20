@@ -2,10 +2,11 @@
 import configparser
 import os
 import sys
+from urllib.parse import unquote, urlparse
 
 
 def _resolver_base_dir() -> str:
-    # Si corre como ejecutable congelado (PyInstaller / cx_Freeze), usa la carpeta del .exe[cite: 7]
+    # Si corre como ejecutable congelado (PyInstaller / cx_Freeze / Nuitka), usa la carpeta del .exe
     if getattr(sys, "frozen", False):
         return os.path.dirname(os.path.abspath(sys.executable))
     return os.path.dirname(os.path.abspath(__file__))
@@ -14,7 +15,7 @@ def _resolver_base_dir() -> str:
 class Settings:
     def __init__(self):
         self.BASE_DIR = _resolver_base_dir()
-        # Busca config.ini junto al ejecutable/script; si no está, prueba en el directorio actual[cite: 7]
+        # Busca config.ini junto al ejecutable/script; si no está, prueba en el directorio actual
         candidatos = [
             os.path.join(self.BASE_DIR, "config.ini"),
             os.path.join(os.getcwd(), "config.ini"),
@@ -43,7 +44,21 @@ class Settings:
         self.DB_NAME = os.getenv("DB_NAME") or self._get("DATABASE", "NAME", "bananeras_db")
         self.DB_SSL_MODE = os.getenv("DB_SSL_MODE") or self._get("DATABASE", "SSL_MODE", "disable")
 
-        # Réplica híbrida hacia Railway (BD remota / SSL / teletrabajo)[cite: 7]
+        # Si viene DATABASE_URL (por ejemplo en Railway), completa los campos DB_* si no fueron forzados explícitamente
+        if self.DATABASE_URL:
+            parsed = urlparse(self.DATABASE_URL)
+            if parsed.hostname and not os.getenv("DB_HOST"):
+                self.DB_HOST = parsed.hostname
+            if parsed.port and not os.getenv("DB_PORT"):
+                self.DB_PORT = parsed.port
+            if parsed.username and not os.getenv("DB_USER"):
+                self.DB_USER = unquote(parsed.username)
+            if parsed.password is not None and not os.getenv("DB_PASSWORD"):
+                self.DB_PASSWORD = unquote(parsed.password)
+            if parsed.path and len(parsed.path) > 1 and not os.getenv("DB_NAME"):
+                self.DB_NAME = parsed.path.lstrip("/")
+
+        # Réplica híbrida hacia Railway (BD remota / SSL / teletrabajo)
         env_railway_enabled = (
             os.getenv("RAILWAY_ENABLED")
             or os.getenv("HYBRID_CLOUD_ENABLED")

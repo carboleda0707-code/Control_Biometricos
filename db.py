@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 import re
+import ssl
 import pg8000.dbapi
 from config import settings
 
@@ -13,15 +14,39 @@ def _quote_ident(name: str) -> str:
     return '"' + name.replace('"', '""') + '"'
 
 
+def _build_ssl_context():
+    """Construye el contexto SSL para pg8000 según DB_SSL_MODE / RAILWAY_SSL_MODE."""
+    mode = (settings.DB_SSL_MODE or "").strip().lower()
+    if mode in ("disable", "off", "false", "0", "allow"):
+        return None
+    if mode in ("verify-ca", "verify-full"):
+        return ssl.create_default_context()
+    if mode in ("require", "prefer") or settings.RAILWAY_ENABLED:
+        ctx = ssl.create_default_context()
+        ctx.check_hostname = False
+        ctx.verify_mode = ssl.CERT_NONE
+        return ctx
+    return None
+
+
+def _connect_pg8000(database_name: str):
+    """Abre conexión con pg8000 aplicando ssl_context solo cuando corresponda."""
+    ssl_ctx = _build_ssl_context()
+    kwargs = {
+        "user": settings.DB_USER,
+        "password": settings.DB_PASSWORD,
+        "host": settings.DB_HOST,
+        "port": settings.DB_PORT,
+        "database": database_name,
+    }
+    if ssl_ctx is not None:
+        kwargs["ssl_context"] = ssl_ctx
+    return pg8000.dbapi.connect(**kwargs)
+
+
 def get_conn():
     """Conexión 100% en Python puro con pg8000 utilizando los parámetros dinámicos de config."""
-    return pg8000.dbapi.connect(
-        user=settings.DB_USER,
-        password=settings.DB_PASSWORD,
-        host=settings.DB_HOST,
-        port=settings.DB_PORT,
-        database=settings.DB_NAME,
-    )
+    return _connect_pg8000(settings.DB_NAME)
 
 
 def crear_base_datos_si_no_existe():
@@ -30,13 +55,7 @@ def crear_base_datos_si_no_existe():
     cur = None
     try:
         db_ident = _quote_ident(settings.DB_NAME)
-        conn = pg8000.dbapi.connect(
-            user=settings.DB_USER,
-            password=settings.DB_PASSWORD,
-            host=settings.DB_HOST,
-            port=settings.DB_PORT,
-            database="postgres",
-        )
+        conn = _connect_pg8000("postgres")
         conn.autocommit = True
         cur = conn.cursor()
 
