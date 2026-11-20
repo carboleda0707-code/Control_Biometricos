@@ -1,0 +1,8 @@
+
+*.exe
+respaldos/
+*.dump
+.env
+__pycache__/
+.venv/
+venv/

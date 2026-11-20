@@ -1,0 +1,1 @@
+from views import companias, haciendas, areas, empleados, dispositivos
