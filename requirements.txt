@@ -5,3 +5,4 @@ pydantic
 anthropic
 openpyxl
 requests
+pg8000
