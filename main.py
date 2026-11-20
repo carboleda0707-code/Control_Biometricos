@@ -24,6 +24,11 @@ from excel_engine import generar_excel_comedor
 app = FastAPI(title="Control Biométrico & Comedores")
 
 
+def _rows_to_dicts(cur, rows) -> list[dict]:
+    cols = [d[0] for d in (cur.description or [])]
+    return [dict(zip(cols, row)) for row in rows]
+
+
 def _normalizar_pin(pin_raw: str) -> str:
     """Limpia espacios y quita ceros a la izquierda en PINs numéricos."""
     clean = str(pin_raw or "").strip()
@@ -385,6 +390,29 @@ def startup():
         pass
 
 
+def _resolver_nombre_empresa() -> str:
+    empresa = (getattr(settings, "EMPRESA_NOMBRE", "") or "").strip()
+    if empresa:
+        return empresa
+    conn = None
+    cur = None
+    try:
+        conn = get_conn()
+        cur = conn.cursor()
+        cur.execute("SELECT nombre FROM companias WHERE activa = TRUE ORDER BY id ASC LIMIT 1;")
+        row = cur.fetchone()
+        if row and row[0]:
+            return str(row[0]).strip()
+    except Exception:
+        pass
+    finally:
+        if cur is not None:
+            cur.close()
+        if conn is not None:
+            conn.close()
+    return ""
+
+
 @app.get("/api/estado-sistema")
 def estado_sistema():
     return {
@@ -393,6 +421,7 @@ def estado_sistema():
         "push_heartbeat_segundos": int(settings.PUSH_HEARTBEAT_SEGUNDOS),
         "puerto": int(settings.SERVER_PORT),
         "base_datos": settings.DB_NAME,
+        "empresa_nombre": _resolver_nombre_empresa(),
     }
 
 
@@ -664,13 +693,14 @@ def listar_dispositivos(request: Request):
     conn = get_conn()
     cur = conn.cursor()
     cur.execute("""
-        SELECT d.sn, d.nombre, d.rol, d.tipo_conexion, d.ip_address, d.port, d.ultima_conexion,
+        SELECT d.sn, d.nombre, d.rol, d.tipo_conexion, d.ip_address, d.port,
+               TO_CHAR(d.ultima_conexion, 'YYYY-MM-DD HH24:MI:SS') AS ultima_conexion,
                e.id AS empacadora_id, e.codigo AS empacadora_codigo, e.nombre AS empacadora_nombre
         FROM dispositivos d
         JOIN empacadoras e ON d.empacadora_id = e.id
         ORDER BY e.id, d.nombre;
     """)
-    data = cur.fetchall()
+    data = _rows_to_dicts(cur, cur.fetchall())
     cur.close()
     conn.close()
     return data
@@ -723,7 +753,7 @@ def listar_empleados_sync():
         WHERE COALESCE(em.activo, TRUE) = TRUE
         ORDER BY em.nombres ASC;
     """)
-    data = cur.fetchall()
+    data = _rows_to_dicts(cur, cur.fetchall())
     cur.close()
     conn.close()
     return data
@@ -747,7 +777,7 @@ def marcaciones_recientes(limite: int = 20):
         ORDER BY m.fecha_hora DESC
         LIMIT %s;
     """, (limite,))
-    data = cur.fetchall()
+    data = _rows_to_dicts(cur, cur.fetchall())
     cur.close()
     conn.close()
     return data
@@ -864,7 +894,7 @@ def listar_empacadoras(fecha: Optional[str] = None):
         GROUP BY e.id, e.codigo, e.nombre
         ORDER BY e.id ASC;
     """, (fecha_consulta, settings.COMEDOR_INICIO, settings.COMEDOR_FIN, fecha_consulta))
-    data = cur.fetchall()
+    data = _rows_to_dicts(cur, cur.fetchall())
     cur.close()
     conn.close()
     return data
@@ -900,7 +930,7 @@ def ejecutar_consulta_sql_segura(query: str):
         conn = get_conn()
         cur = conn.cursor()
         cur.execute(query)
-        resultados = cur.fetchall()
+        resultados = _rows_to_dicts(cur, cur.fetchall())
         cur.close()
         conn.close()
         return {"resultados": json.loads(json.dumps(resultados, default=str))}
@@ -911,7 +941,7 @@ def ejecutar_consulta_sql_segura(query: str):
 tools_definition = [
     {
         "name": "ejecutar_consulta_sql_segura",
-        "description": "Ejecuta una consulta SQL SELECT en PostgreSQL local para analizar asistencias, empleados, departamentos, dispositivos o almuerzos en las 5 empacadoras.",
+        "description": "Ejecuta una consulta SQL SELECT en PostgreSQL para analizar asistencias, empleados, departamentos, dispositivos o almuerzos en las empacadoras.",
         "input_schema": {
             "type": "object",
             "properties": {
@@ -938,21 +968,23 @@ def chat_rrhh(req: ChatRequest):
         raise HTTPException(status_code=500, detail="Falta configurar ANTHROPIC_API_KEY en config.ini o entorno")
 
     fecha_consulta = req.fecha or date.today().isoformat()
+    empresa_actual = _resolver_nombre_empresa()
     client = anthropic.Anthropic(api_key=api_key)
 
     system_prompt = (
-        f"Eres el analista experto de RR.HH. y Operaciones para un grupo de 5 empacadoras de banano en Ecuador. "
-        f"La red local conecta todas las haciendas por VLANs. Fecha de referencia actual: {fecha_consulta}. "
+        f"Eres el analista experto de RR.HH. y Operaciones{f' para {empresa_actual}' if empresa_actual else ''}. "
+        f"La red local conecta las haciendas por VLANs y replica los datos hacia la nube. Fecha de referencia actual: {fecha_consulta}. "
         f"Horario oficial de comedor: {settings.COMEDOR_INICIO} a {settings.COMEDOR_FIN}. "
         "Tienes acceso a PostgreSQL mediante la herramienta 'ejecutar_consulta_sql_segura'. "
         "Esquema de tablas relacional:\n"
         "- companias (id, ruc, nombre, activa)\n"
         "- empacadoras (id, compania_id, codigo, nombre, ubicacion, correo, encargado, activa)\n"
         "- departamentos (id, empacadora_id, nombre, descripcion, activo)\n"
-        "- dispositivos (sn, empacadora_id, nombre, rol ['COMEDOR', 'EMPAQUE', 'OFICINA'], tipo_conexion, ip_address, port, ultima_conexion)\n"
+        "- dispositivos (sn, empacadora_id, nombre, rol ['COMEDOR', 'EMPAQUE', 'PALETIZADO', 'OFICINA', 'GARITA'], tipo_conexion, ip_address, port, ultima_conexion)\n"
         "- empleados (pin [Cédula], cedula, nombres, empacadora_id, departamento_id, area, privilege, password, card_number, activo)\n"
+        "- empleado_haciendas (pin_empleado, empacadora_id, area_autorizada)\n"
         "- marcaciones (id, pin_empleado, fecha_hora, sn_dispositivo, estado_verificacion)\n"
-        "Cuando RR.HH. pregunte sobre escenarios complejos (asistencia por departamento, control de comedor, olvidos de marcación, personal activo, etc.), "
+        "Cuando el usuario pregunte sobre asistencias, marcaciones, comedor, olvidos de marcación, personal o dispositivos, "
         "genera la consulta SQL SELECT adecuada, ejecútala con la herramienta, analiza los datos reales y entrega una respuesta clara, directa y estructurada."
     )
 

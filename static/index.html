@@ -3,24 +3,22 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Dispositivos Biométricos (ZKTeco)</title>
+  <title>Panel de Consulta Inteligente - Control Biométrico</title>
   <style>
     :root {
-      --bg: #ffffff;
+      --bg: #f8fafc;
       --surface: #ffffff;
-      --surface-soft: #f8fafc;
+      --surface-soft: #f1f5f9;
       --info-bg: #eef5ff;
-      --info-text: #2563eb;
+      --info-text: #1d4ed8;
       --border: #e2e8f0;
-      --text: #1e293b;
+      --text: #0f172a;
       --muted: #64748b;
       --accent: #be123c;
       --accent-hover: #9f1239;
       --ok-bg: #dcfce7;
       --ok-text: #166534;
-      --err-bg: #fee2e2;
-      --err-text: #991b1b;
-      --radius: 8px;
+      --radius: 10px;
     }
 
     * { box-sizing: border-box; }
@@ -30,99 +28,60 @@
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Inter, Arial, sans-serif;
       color: var(--text);
       background: var(--bg);
-      line-height: 1.45;
+      line-height: 1.5;
     }
-
-    .app-shell {
-      display: grid;
-      grid-template-columns: 245px 1fr;
-      min-height: 100vh;
-    }
-
-    /* Menú lateral */
-    .sidebar {
-      background: var(--surface-soft);
-      border-right: 1px solid var(--border);
-      padding: 20px 14px;
-      display: flex;
-      flex-direction: column;
-      gap: 6px;
-    }
-
-    .sidebar-brand {
-      font-size: 1rem;
-      font-weight: 700;
-      padding: 6px 10px 16px;
-      margin-bottom: 8px;
-      border-bottom: 1px solid var(--border);
-      color: var(--text);
-    }
-
-    .side-btn {
-      appearance: none;
-      width: 100%;
-      text-align: left;
-      background: transparent;
-      border: 1px solid transparent;
-      border-radius: var(--radius);
-      padding: 10px 12px;
-      font-size: 0.92rem;
-      font-weight: 500;
-      color: var(--text);
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      transition: background 0.15s, color 0.15s;
-    }
-
-    .side-btn:hover {
-      background: #ffffff;
-    }
-
-    .side-btn.active {
-      background: #fff1f2;
-      color: var(--accent);
-      border-color: #fecdd3;
-      font-weight: 600;
-    }
-
-    .page-panel { display: none; }
-    .page-panel.active { display: block; }
 
     .container {
-      max-width: 1180px;
-      padding: 24px 28px 48px;
+      max-width: 1120px;
+      margin: 0 auto;
+      padding: 28px 20px 56px;
     }
 
-    .top-bar {
+    .welcome-hero {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-left: 5px solid var(--accent);
+      border-radius: var(--radius);
+      padding: 22px 24px;
+      margin-bottom: 24px;
+    }
+
+    .welcome-top {
       display: flex;
       justify-content: space-between;
       align-items: flex-start;
-      gap: 16px;
+      gap: 14px;
       flex-wrap: wrap;
     }
 
-    .header-title {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      margin: 0 0 6px;
-      font-size: 1.9rem;
+    .welcome-title {
+      margin: 0 0 8px;
+      font-size: 1.42rem;
       font-weight: 700;
-      letter-spacing: -0.02em;
+      letter-spacing: -0.01em;
     }
 
-    .subtitle {
-      margin: 0 0 18px;
+    .welcome-sub {
+      margin: 0;
+      font-size: 0.96rem;
       color: var(--muted);
-      font-size: 0.95rem;
+    }
+
+    .empresa-tag {
+      display: inline-block;
+      margin-top: 10px;
+      padding: 5px 12px;
+      border-radius: 999px;
+      background: var(--info-bg);
+      color: var(--info-text);
+      font-size: 0.86rem;
+      font-weight: 600;
     }
 
     .mode-pill {
       display: inline-flex;
       align-items: center;
-      gap: 8px;
+      gap: 6px;
       padding: 6px 12px;
       border-radius: 999px;
       font-size: 0.82rem;
@@ -139,81 +98,35 @@
       border-color: #bbf7d0;
     }
 
-    /* Barra de pestañas */
-    .tabs {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 6px;
-      border-bottom: 1px solid var(--border);
-      margin-bottom: 24px;
-    }
-
-    .tab-btn {
-      appearance: none;
-      background: transparent;
-      border: none;
-      border-bottom: 2px solid transparent;
-      padding: 10px 14px;
-      font-size: 0.92rem;
-      font-weight: 500;
-      color: var(--text);
-      cursor: pointer;
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      transition: color 0.15s, border-color 0.15s;
-    }
-
-    .tab-btn:hover {
-      color: var(--accent);
-    }
-
-    .tab-btn.active {
-      color: var(--accent);
-      border-bottom-color: var(--accent);
-      font-weight: 600;
-    }
-
-    .tab-panel { display: none; }
-    .tab-panel.active { display: block; }
-
-    h2 {
-      font-size: 1.45rem;
-      font-weight: 700;
-      margin: 0 0 14px;
-      letter-spacing: -0.01em;
-    }
-
-    h3 {
-      font-size: 1.2rem;
-      font-weight: 700;
-      margin: 0 0 8px;
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
-
-    .desc {
-      margin: 0 0 14px;
-      color: var(--muted);
-      font-size: 0.9rem;
-    }
-
-    .divider {
-      border: none;
-      border-top: 1px solid var(--border);
-      margin: 26px 0;
-    }
-
     .card {
       background: var(--surface);
       border: 1px solid var(--border);
       border-radius: var(--radius);
-      padding: 18px;
-      margin-bottom: 20px;
+      padding: 20px 22px;
+      margin-bottom: 22px;
     }
 
-    /* Controles de formulario */
+    .card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin-bottom: 14px;
+    }
+
+    h2 {
+      margin: 0;
+      font-size: 1.15rem;
+      font-weight: 700;
+    }
+
+    .desc {
+      margin: 4px 0 14px;
+      color: var(--muted);
+      font-size: 0.9rem;
+    }
+
     .field-group {
       margin-bottom: 14px;
     }
@@ -221,61 +134,32 @@
     label {
       display: block;
       font-size: 0.88rem;
-      font-weight: 500;
-      color: var(--text);
+      font-weight: 600;
       margin-bottom: 6px;
     }
 
-    select, input[type="text"], input[type="number"], input[type="datetime-local"] {
+    select, textarea {
       width: 100%;
       padding: 10px 12px;
-      font-size: 0.92rem;
+      font-size: 0.93rem;
+      font-family: inherit;
       color: var(--text);
       background: var(--surface-soft);
       border: 1px solid var(--border);
-      border-radius: var(--radius);
+      border-radius: 8px;
       outline: none;
     }
 
-    select:focus, input:focus {
+    select:focus, textarea:focus {
       border-color: #94a3b8;
       background: #ffffff;
     }
 
-    .check-inline {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      margin-bottom: 12px;
-      font-size: 0.9rem;
-    }
+    textarea { resize: vertical; }
 
-    /* Banners informativos */
-    .alert-info {
-      background: var(--info-bg);
-      color: var(--info-text);
-      padding: 12px 16px;
-      border-radius: var(--radius);
-      font-size: 0.9rem;
-      margin: 10px 0 16px;
-    }
-
-    .alert-status {
-      display: none;
-      padding: 10px 14px;
-      border-radius: var(--radius);
-      font-size: 0.88rem;
-      margin: 12px 0;
-      border: 1px solid var(--border);
-      background: var(--surface-soft);
-    }
-
-    .alert-status.visible { display: block; }
-
-    /* Botones */
     .btn {
       appearance: none;
-      border-radius: var(--radius);
+      border-radius: 8px;
       padding: 9px 16px;
       font-size: 0.9rem;
       font-weight: 600;
@@ -287,12 +171,17 @@
       transition: background 0.15s, opacity 0.15s;
     }
 
+    .btn:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+
     .btn-primary {
       background: var(--accent);
       color: #ffffff;
     }
 
-    .btn-primary:hover {
+    .btn-primary:hover:not(:disabled) {
       background: var(--accent-hover);
     }
 
@@ -302,33 +191,15 @@
       border-color: var(--border);
     }
 
-    .btn-secondary:hover {
+    .btn-secondary:hover:not(:disabled) {
       background: var(--surface-soft);
     }
 
-    /* Dos columnas */
-    .two-col {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 28px;
-      align-items: start;
-    }
-
-    @media (max-width: 820px) {
-      .app-shell { grid-template-columns: 1fr; }
-      .sidebar { border-right: none; border-bottom: 1px solid var(--border); }
-      .container { padding: 16px; }
-      .header-title { font-size: 1.5rem; }
-      .two-col { grid-template-columns: 1fr; gap: 20px; }
-    }
-
-    /* Tablas */
     .table-wrap {
       width: 100%;
       overflow-x: auto;
       border: 1px solid var(--border);
-      border-radius: var(--radius);
-      background: #ffffff;
+      border-radius: 8px;
     }
 
     table {
@@ -340,454 +211,138 @@
 
     th {
       color: var(--muted);
-      font-weight: 500;
-      padding: 11px 14px;
+      font-weight: 600;
+      padding: 10px 14px;
       border-bottom: 1px solid var(--border);
+      background: var(--surface-soft);
       white-space: nowrap;
     }
 
     td {
-      padding: 11px 14px;
+      padding: 10px 14px;
       border-bottom: 1px solid #f1f5f9;
       white-space: nowrap;
     }
 
     tr:last-child td { border-bottom: none; }
 
-    .conn-cell {
-      font-weight: 700;
-      border-radius: 6px;
-      text-align: center;
-      padding: 3px 8px;
+    .badge-activo {
       display: inline-block;
-    }
-
-    .conn-online {
-      background-color: var(--ok-bg);
+      padding: 3px 9px;
+      border-radius: 999px;
+      font-size: 0.8rem;
+      font-weight: 700;
+      background: var(--ok-bg);
       color: var(--ok-text);
     }
 
-    .conn-offline {
-      background-color: var(--err-bg);
-      color: var(--err-text);
+    .respuesta-claude {
+      display: none;
+      margin-top: 16px;
+      padding: 16px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--surface-soft);
+      white-space: pre-wrap;
+      font-size: 0.93rem;
+      line-height: 1.55;
     }
 
     .meta-line {
-      margin-top: 10px;
       font-size: 0.88rem;
       color: var(--muted);
     }
 
-    .checklist-box {
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-      padding: 12px 14px;
-      margin-bottom: 14px;
-      background: #ffffff;
-    }
-
-    .check-row {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      padding: 6px 0;
-      font-size: 0.9rem;
+    @media (max-width: 640px) {
+      .container { padding: 16px 12px 40px; }
+      .welcome-hero { padding: 16px; }
+      .welcome-title { font-size: 1.2rem; }
     }
   </style>
 </head>
 <body>
-  <div class="app-shell">
-    <aside class="sidebar">
-      <div class="sidebar-brand">🍌 Sistema Biométrico</div>
-      <button class="side-btn active" data-page="biometricos">🖨️ Dispositivos Biométricos</button>
-      <button class="side-btn" data-page="respaldos">💾 Copia de Seguridad / Restaurar</button>
-    </aside>
-
-    <div>
-      <!-- PÁGINA 1: DISPOSITIVOS BIOMÉTRICOS -->
-      <div id="page-biometricos" class="page-panel active">
-        <div class="container">
-          <div class="top-bar">
-            <div>
-              <h1 class="header-title">🖨️ Dispositivos Biométricos (ZKTeco)</h1>
-              <p class="subtitle">Administración de relojes biométricos, escáner de red por segmento VLAN/IP y sincronización estricta por Hacienda + Área.</p>
-            </div>
-            <div id="badge-modo-sistema" class="mode-pill">🖥️ Modo Local (Servidor LAN/VLAN)</div>
-          </div>
-
-          <!-- Barra de pestañas -->
-          <nav class="tabs" role="tablist">
-            <button class="tab-btn active" data-tab="listado">📋 Listado y Estado</button>
-            <button class="tab-btn" data-tab="registrar">➕ Registrar Dispositivo</button>
-            <button class="tab-btn" data-tab="modificar">✏️ Modificar / Eliminar</button>
-            <button class="tab-btn" data-tab="sincronizacion">🔄 Sincronización Red</button>
-            <button class="tab-btn" data-tab="escaner">🔍 Escáner de Red (IP/VLAN)</button>
-          </nav>
-
-          <div id="global-status" class="alert-status"></div>
-
-          <!-- 1. LISTADO Y ESTADO -->
-          <section id="tab-listado" class="tab-panel active">
-            <div style="display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:10px;">
-              <h2 style="margin:0;">Relojes Biométricos Registrados</h2>
-              <button class="btn btn-secondary" id="btn-refrescar-estado">🔄 Refrescar Estado</button>
-            </div>
-            <div class="field-group">
-              <label for="filtro-hacienda-listado">Filtrar dispositivos por Hacienda Empacadora:</label>
-              <select id="filtro-hacienda-listado">
-                <option value="">Todas las haciendas</option>
-              </select>
-            </div>
-            <div class="table-wrap">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Número de Serie (SN)</th>
-                    <th>Nombre / Alias del Reloj</th>
-                    <th>Cód. Hacienda</th>
-                    <th>Hacienda Empacadora</th>
-                    <th>Área Física de Control</th>
-                    <th>Conexión</th>
-                    <th>Dirección IP</th>
-                    <th>Puerto</th>
-                    <th>Última Conexión Activa</th>
-                  </tr>
-                </thead>
-                <tbody id="tbody-dispositivos"></tbody>
-              </table>
-            </div>
-          </section>
-
-          <!-- 2. REGISTRAR DISPOSITIVO -->
-          <section id="tab-registrar" class="tab-panel">
-            <h2>Registrar Nuevo Biométrico</h2>
-            <div class="two-col">
-              <div>
-                <div class="field-group">
-                  <label for="reg-sn">Número de Serie (SN)</label>
-                  <input type="text" id="reg-sn" placeholder="Ej. CMYD224760414" />
-                </div>
-                <div class="field-group">
-                  <label for="reg-nombre">Nombre / Alias del Reloj</label>
-                  <input type="text" id="reg-nombre" placeholder="Ej. D-NIÑO-COMEDOR" />
-                </div>
-                <div class="field-group">
-                  <label for="reg-hacienda">Hacienda Empacadora</label>
-                  <select id="reg-hacienda"></select>
-                </div>
-                <div class="field-group">
-                  <label for="reg-rol">Área Física de Control</label>
-                  <select id="reg-rol">
-                    <option value="COMEDOR">COMEDOR</option>
-                    <option value="EMPAQUE">EMPAQUE</option>
-                    <option value="PALETIZADO">PALETIZADO</option>
-                    <option value="OFICINA">OFICINA</option>
-                    <option value="GARITA">GARITA</option>
-                  </select>
-                </div>
-              </div>
-              <div>
-                <div class="field-group">
-                  <label for="reg-tipo-conexion">Tipo de Conexión</label>
-                  <select id="reg-tipo-conexion">
-                    <option value="PUSH_ADMS">PUSH_ADMS</option>
-                    <option value="PULL_SDK">PULL_SDK</option>
-                  </select>
-                </div>
-                <div class="field-group">
-                  <label for="reg-ip">Dirección IP (LAN / VLAN)</label>
-                  <input type="text" id="reg-ip" placeholder="Ej. 192.168.100.12" />
-                </div>
-                <div class="field-group">
-                  <label for="reg-puerto">Puerto</label>
-                  <input type="number" id="reg-puerto" value="4370" />
-                </div>
-              </div>
-            </div>
-            <button class="btn btn-primary" id="btn-guardar-dispositivo">💾 Guardar Dispositivo</button>
-          </section>
-
-          <!-- 3. MODIFICAR / ELIMINAR -->
-          <section id="tab-modificar" class="tab-panel">
-            <h2>Modificar o Eliminar Biométrico</h2>
-            <div class="field-group">
-              <label for="sel-mod-sn">Seleccione el reloj:</label>
-              <select id="sel-mod-sn"></select>
-            </div>
-            <div class="two-col">
-              <div class="field-group">
-                <label for="mod-nombre">Nombre / Alias</label>
-                <input type="text" id="mod-nombre" />
-              </div>
-              <div class="field-group">
-                <label for="mod-rol">Área Física de Control</label>
-                <select id="mod-rol">
-                  <option value="COMEDOR">COMEDOR</option>
-                  <option value="EMPAQUE">EMPAQUE</option>
-                  <option value="PALETIZADO">PALETIZADO</option>
-                  <option value="OFICINA">OFICINA</option>
-                  <option value="GARITA">GARITA</option>
-                </select>
-              </div>
-            </div>
-            <div class="two-col">
-              <div class="field-group">
-                <label for="mod-tipo-conexion">Tipo de Conexión</label>
-                <select id="mod-tipo-conexion">
-                  <option value="PUSH_ADMS">PUSH_ADMS</option>
-                  <option value="PULL_SDK">PULL_SDK</option>
-                </select>
-              </div>
-              <div class="field-group">
-                <label for="mod-ip">Dirección IP</label>
-                <input type="text" id="mod-ip" />
-              </div>
-            </div>
-            <div class="field-group" style="max-width: 340px;">
-              <label for="mod-puerto">Puerto</label>
-              <input type="number" id="mod-puerto" value="4370" />
-            </div>
-            <div style="display:flex; gap:10px; flex-wrap:wrap;">
-              <button class="btn btn-primary" id="btn-actualizar-dispositivo">✏️ Actualizar Reloj</button>
-              <button class="btn btn-secondary" id="btn-eliminar-dispositivo">🗑️ Eliminar Reloj</button>
-            </div>
-          </section>
-
-          <!-- 4. SINCRONIZACIÓN RED (PULL) -->
-          <section id="tab-sincronizacion" class="tab-panel">
-            <h2>🔄 Sincronización Bidireccional por Red Local (PULL)</h2>
-
-            <h3>🏠 Sincronizar Biométricos por Localidad / Hacienda → Servidor</h3>
-            <p class="desc">Seleccione la localidad (hacienda) y marque con el checkbox los biométricos que desea sincronizar (importa colaboradores nuevos, acumula permisos de área/hacienda y descarga marcaciones sin duplicar).</p>
-
-            <div class="field-group">
-              <label for="sel-localidad-sync">Localidad / Hacienda Empacadora:</label>
-              <select id="sel-localidad-sync"></select>
-            </div>
-
-            <div id="sync-localidad-aviso" class="alert-info">Esta localidad no tiene biométricos con IP configurada.</div>
-            <div id="sync-localidad-lista" class="checklist-box" style="display:none;"></div>
-            <button class="btn btn-secondary" id="btn-sync-localidad" style="display:none;">🔄 Sincronizar Seleccionados</button>
-
-            <hr class="divider" />
-
-            <div class="field-group">
-              <label for="sel-reloj-objetivo">Seleccione el Reloj Biométrico objetivo:</label>
-              <select id="sel-reloj-objetivo"></select>
-            </div>
-
-            <div class="two-col">
-              <div>
-                <h3>📥 Descargar Asistencias</h3>
-                <p class="desc">Extrae las nuevas marcaciones del reloj físico y guárdalas en PostgreSQL.</p>
-                <button class="btn btn-primary" id="btn-descargar-marcaciones">🚀 Descargar Marcaciones Ahora</button>
-              </div>
-
-              <div>
-                <h3>📤 Enviar Empleados al Reloj Seleccionado</h3>
-                <p class="desc" id="lbl-sube-area">Sube colaboradores autorizados en esta Hacienda y Área Física: <strong>COMEDOR</strong>.</p>
-                <div class="alert-info" id="box-autorizados-area">
-                  💡 Empleados autorizados para <strong id="txt-area-autorizados">COMEDOR</strong> en esta hacienda: <strong id="num-autorizados-area">0</strong>
-                </div>
-                <button class="btn btn-secondary" id="btn-enviar-base-empleados">👥 Enviar Base de Empleados al Biométrico</button>
-              </div>
-            </div>
-
-            <hr class="divider" />
-
-            <h3>🎯 Sincronizar Colaborador Específico con Sus Biométricos Autorizados</h3>
-            <p class="desc">Envía automáticamente a un colaborador a <strong>todos</strong> los relojes biométricos que coincidan con sus permisos de Hacienda + Área.</p>
-
-            <div class="field-group">
-              <label for="sel-colaborador">Seleccione el colaborador a sincronizar:</label>
-              <select id="sel-colaborador"></select>
-            </div>
-
-            <div class="meta-line" id="txt-relojes-destino">Relojes destino detectados (0): -</div>
-            <div style="margin-top: 12px;">
-              <button class="btn btn-primary" id="btn-sync-colaborador">📡 Sincronizar Colaborador en Todos Sus Biométricos</button>
-            </div>
-
-            <hr class="divider" />
-
-            <h3>🛠️ Consultar Usuarios del Biométrico y Modificar Datos (Sin Alterar Marcaciones)</h3>
-            <p class="desc" id="txt-info-usuarios-reloj">Lee los usuarios almacenados en el reloj seleccionado. Marque el usuario que desea modificar para actualizar sus datos sin tocar marcaciones.</p>
-
-            <button class="btn btn-secondary" id="btn-consultar-usuarios">🔍 Consultar Base de Usuarios del Biométrico</button>
-
-            <div id="panel-usuarios-reloj" style="display:none; margin-top:16px;">
-              <div class="table-wrap">
-                <table>
-                  <thead>
-                    <tr>
-                      <th>Sel.</th>
-                      <th>PIN / ID</th>
-                      <th>Nombre</th>
-                      <th>Tarjeta</th>
-                      <th>Privilegio</th>
-                    </tr>
-                  </thead>
-                  <tbody id="tbody-usuarios-reloj"></tbody>
-                </table>
-              </div>
-              <div class="two-col" style="margin-top:14px;">
-                <div class="field-group">
-                  <label for="edit-usr-nombre">Nuevo Nombre del Usuario Seleccionado</label>
-                  <input type="text" id="edit-usr-nombre" placeholder="Nombre actualizado" />
-                </div>
-                <div class="field-group">
-                  <label for="edit-usr-card">Número de Tarjeta (opcional)</label>
-                  <input type="text" id="edit-usr-card" placeholder="0" />
-                </div>
-              </div>
-              <button class="btn btn-primary" id="btn-guardar-usuario-reloj">💾 Actualizar Usuario en Reloj (Sin Alterar Marcaciones)</button>
-            </div>
-
-            <hr class="divider" />
-
-            <h3>📊 Visor Rápido de Marcaciones Recientes en Base de Datos</h3>
-            <div class="table-wrap">
-              <table>
-                <thead>
-                  <tr>
-                    <th>PIN / Cédula</th>
-                    <th>Colaborador</th>
-                    <th>Fecha y Hora</th>
-                    <th>Dispositivo Origen</th>
-                    <th>Hacienda Empacadora</th>
-                  </tr>
-                </thead>
-                <tbody id="tbody-marcaciones-recientes"></tbody>
-              </table>
-            </div>
-          </section>
-
-          <!-- 5. ESCÁNER DE RED (IP/VLAN) -->
-          <section id="tab-escaner" class="tab-panel">
-            <h2>🔍 Escáner de Red (IP/VLAN)</h2>
-            <p class="desc">Verifica conectividad TCP al puerto biométrico (4370) en tus segmentos LAN / VLANs.</p>
-            <div class="two-col">
-              <div class="field-group">
-                <label for="scan-ip">Dirección IP o Rango (Ej. 192.168.100.12)</label>
-                <input type="text" id="scan-ip" placeholder="192.168.100.12" />
-              </div>
-              <div class="field-group">
-                <label for="scan-puerto">Puerto TCP</label>
-                <input type="number" id="scan-puerto" value="4370" />
-              </div>
-            </div>
-            <button class="btn btn-primary" id="btn-probar-ip">🔍 Probar Conexión</button>
-            <div class="meta-line" id="resultado-scan"></div>
-          </section>
+  <div class="container">
+    <!-- CABECERA DE BIENVENIDA -->
+    <header class="welcome-hero">
+      <div class="welcome-top">
+        <div>
+          <h1 class="welcome-title">
+            Panel de consulta Inteligente utilizando IA Claude Code conectada a la base de datos del servidor de Marcaciones
+          </h1>
+          <p class="welcome-sub">
+            Empresa: <strong id="nombre-empresa">Cargando...</strong>
+          </p>
+          <span class="empresa-tag" id="tag-empresa">Servidor de Marcaciones</span>
         </div>
+        <div id="badge-modo-sistema" class="mode-pill">☁️ Réplica Nube</div>
+      </div>
+    </header>
+
+    <!-- CONSULTA INTELIGENTE CON CLAUDE -->
+    <section class="card">
+      <div class="card-header">
+        <h2>🤖 Consulta Inteligente (IA Claude)</h2>
+      </div>
+      <p class="desc">Escribe tu consulta sobre asistencia, marcaciones, haciendas o personal registrado en la base de datos.</p>
+
+      <div class="field-group">
+        <label for="claude-prompt-input">Prompt de consulta</label>
+        <textarea
+          id="claude-prompt-input"
+          rows="4"
+          placeholder="Ej. Muéstrame el resumen de marcaciones de hoy por hacienda y quiénes marcaron en comedor..."
+        ></textarea>
       </div>
 
-      <!-- PÁGINA 2: COPIA DE SEGURIDAD Y RESTAURACIÓN -->
-      <div id="page-respaldos" class="page-panel">
-        <div class="container">
-          <h1 class="header-title">💾 Copia de Seguridad y Restauración</h1>
-          <p class="subtitle">Programa respaldos por fecha y hora exactas o restaura la base de datos local cuando sea necesario.</p>
-
-          <div id="backup-status" class="alert-status"></div>
-
-          <div class="two-col">
-            <div class="card">
-              <h3>🕒 Programar Copia por Fecha y Hora</h3>
-              <div class="field-group">
-                <label for="prog-fecha-hora">Fecha y hora de ejecución (Ej. Lunes 13 de diciembre, 14:00)</label>
-                <input type="datetime-local" id="prog-fecha-hora" />
-              </div>
-              <label class="check-inline">
-                <input type="checkbox" id="prog-semanal" />
-                <span>Repetir cada semana en el mismo día y hora</span>
-              </label>
-              <label class="check-inline">
-                <input type="checkbox" id="prog-habilitado" checked />
-                <span>Activar programación automática</span>
-              </label>
-              <div style="display:flex; gap:10px; flex-wrap:wrap;">
-                <button class="btn btn-primary" id="btn-guardar-prog">📅 Guardar Programación</button>
-                <button class="btn btn-secondary" id="btn-respaldo-ahora">⚡ Respaldar Ahora</button>
-              </div>
-            </div>
-
-            <div class="card">
-              <h3>♻️ Restaurar Base de Datos</h3>
-              <div id="info-prog-actual" class="alert-info">Sin programación activa.</div>
-              <div class="field-group">
-                <label for="sel-archivo-restaurar">Seleccione el archivo de respaldo (.dump)</label>
-                <select id="sel-archivo-restaurar"></select>
-              </div>
-              <button class="btn btn-primary" id="btn-restaurar-bd">♻️ Restaurar Base Seleccionada</button>
-            </div>
-          </div>
-
-          <h3>📂 Historial de Copias de Seguridad</h3>
-          <div class="table-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>Archivo</th>
-                  <th>Tamaño (KB)</th>
-                  <th>Fecha de Creación</th>
-                </tr>
-              </thead>
-              <tbody id="tbody-respaldos"></tbody>
-            </table>
-          </div>
-        </div>
+      <div style="display:flex; gap:12px; align-items:center; flex-wrap:wrap;">
+        <button type="button" class="btn btn-primary" id="btn-enviar-claude">✨ Consultar con Claude</button>
+        <span class="meta-line" id="claude-prompt-estado"></span>
       </div>
-    </div>
+
+      <div id="claude-respuesta-box" class="respuesta-claude"></div>
+    </section>
+
+    <!-- LISTADO DE BIOMÉTRICOS ACTIVOS -->
+    <section class="card">
+      <div class="card-header">
+        <h2>🖨️ Biométricos Activos (<span id="contador-activos">0</span>)</h2>
+        <button type="button" class="btn btn-secondary" id="btn-refrescar-activos">🔄 Actualizar</button>
+      </div>
+
+      <div class="field-group" style="max-width: 380px;">
+        <label for="filtro-hacienda-activos">Filtrar por Hacienda Empacadora:</label>
+        <select id="filtro-hacienda-activos">
+          <option value="">Todas las haciendas</option>
+        </select>
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Estado</th>
+              <th>Número de Serie (SN)</th>
+              <th>Nombre / Alias</th>
+              <th>Hacienda Empacadora</th>
+              <th>Área Física</th>
+              <th>Conexión</th>
+              <th>Última Conexión Activa</th>
+            </tr>
+          </thead>
+          <tbody id="tbody-biometricos-activos">
+            <tr><td colspan="7">Cargando biométricos activos...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
   </div>
 
   <script>
     let pushHeartbeatSegundos = 300;
     let empacadoras = [];
     let dispositivos = [];
-    let empleados = [];
 
-    const statusBox = document.getElementById("global-status");
-    function mostrarEstado(msg, esError = false) {
-      statusBox.textContent = msg;
-      statusBox.style.borderColor = esError ? "#fecdd3" : "#bfdbfe";
-      statusBox.style.background = esError ? "#fff1f2" : "#eff6ff";
-      statusBox.style.color = esError ? "#9f1239" : "#1e40af";
-      statusBox.classList.add("visible");
-    }
-
-    const backupStatusBox = document.getElementById("backup-status");
-    function mostrarEstadoRespaldo(msg, esError = false) {
-      backupStatusBox.textContent = msg;
-      backupStatusBox.style.borderColor = esError ? "#fecdd3" : "#bfdbfe";
-      backupStatusBox.style.background = esError ? "#fff1f2" : "#eff6ff";
-      backupStatusBox.style.color = esError ? "#9f1239" : "#1e40af";
-      backupStatusBox.classList.add("visible");
-    }
-
-    // Menú lateral
-    document.querySelectorAll(".side-btn").forEach(btn => {
-      btn.addEventListener("click", () => {
-        document.querySelectorAll(".side-btn").forEach(b => b.classList.remove("active"));
-        document.querySelectorAll(".page-panel").forEach(p => p.classList.remove("active"));
-        btn.classList.add("active");
-        document.getElementById("page-" + btn.dataset.page).classList.add("active");
-        if (btn.dataset.page === "respaldos") {
-          cargarRespaldos();
-        }
-      });
-    });
-
-    // Pestañas de dispositivos
-    document.querySelectorAll(".tab-btn").forEach(btn => {
-      btn.addEventListener("click", () => {
-        document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active"));
-        document.querySelectorAll(".tab-panel").forEach(p => p.classList.remove("active"));
-        btn.classList.add("active");
-        document.getElementById("tab-" + btn.dataset.tab).classList.add("active");
-      });
-    });
-
-    function estaConectadoDispositivo(d) {
+    function estaActivoDispositivo(d) {
       if (typeof d.conectado === "boolean") return d.conectado;
       if (typeof d.online === "boolean") return d.online;
 
@@ -801,489 +356,132 @@
       return Boolean(d.ip_address && String(d.ip_address).trim() !== "");
     }
 
-    async function cargarModoSistema() {
+    async function cargarEstadoYEmpresa() {
       try {
         const res = await fetch("/api/estado-sistema");
         if (!res.ok) return;
         const info = await res.json();
+
         if (typeof info.push_heartbeat_segundos === "number" && info.push_heartbeat_segundos > 0) {
           pushHeartbeatSegundos = info.push_heartbeat_segundos;
         }
+
+        const empresa = (info.empresa_nombre || "").trim();
+        document.getElementById("nombre-empresa").textContent = empresa || "No configurada";
+        document.getElementById("tag-empresa").textContent = empresa
+          ? `Empresa: ${empresa}`
+          : "Servidor de Marcaciones";
+
         const badge = document.getElementById("badge-modo-sistema");
         if (info.railway_enabled) {
-          badge.textContent = "☁️ Modo Híbrido Activo (Local + Réplica Railway)";
+          badge.textContent = "☁️ Conectado a Réplica Nube";
           badge.classList.add("cloud-on");
         } else {
-          badge.textContent = "🖥️ Modo Local (Servidor LAN/VLAN)";
+          badge.textContent = "🖥️ Servidor de Marcaciones";
           badge.classList.remove("cloud-on");
         }
       } catch (_) {}
     }
 
-    async function cargarTodo() {
-      try {
-        const [resEmp, resDisp, resEmpCol, resMarc] = await Promise.all([
-          fetch("/api/empacadoras"),
-          fetch("/api/dispositivos"),
-          fetch("/api/empleados"),
-          fetch("/api/marcaciones/recientes?limite=20")
-        ]);
-
-        empacadoras = await resEmp.json();
-        dispositivos = await resDisp.json();
-        empleados = await resEmpCol.json();
-        const recientes = await resMarc.json();
-
-        await cargarModoSistema();
-        renderEmpacadorasSelects();
-        renderListadoDispositivos();
-        cargarFormularioEdicion();
-        renderSyncLocalidad();
-        renderRelojObjetivo();
-        renderColaboradoresSync();
-        renderMarcacionesRecientes(recientes);
-      } catch (err) {
-        mostrarEstado("No se pudo cargar información inicial desde el servidor: " + err.message, true);
-      }
-    }
-
-    function renderEmpacadorasSelects() {
-      const filtro = document.getElementById("filtro-hacienda-listado");
-      const regHac = document.getElementById("reg-hacienda");
-      const locSync = document.getElementById("sel-localidad-sync");
-
-      const valFiltro = filtro.value;
-      filtro.innerHTML = '<option value="">Todas las haciendas</option>';
-      regHac.innerHTML = "";
-      locSync.innerHTML = "";
-
+    function renderFiltroHaciendas() {
+      const sel = document.getElementById("filtro-hacienda-activos");
+      const prev = sel.value;
+      sel.innerHTML = '<option value="">Todas las haciendas</option>';
       empacadoras.forEach(e => {
-        const label = `[${e.codigo}] ${e.nombre}`;
-        filtro.add(new Option(label, e.id));
-        regHac.add(new Option(label, e.id));
-        locSync.add(new Option(label, e.id));
+        sel.add(new Option(`[${e.codigo}] ${e.nombre}`, e.id));
+      });
+      if (prev) sel.value = prev;
+    }
+
+    function renderBiometricosActivos() {
+      const filtroId = document.getElementById("filtro-hacienda-activos").value;
+      const tbody = document.getElementById("tbody-biometricos-activos");
+      const contador = document.getElementById("contador-activos");
+
+      const activos = dispositivos.filter(d => {
+        if (!estaActivoDispositivo(d)) return false;
+        if (filtroId && String(d.empacadora_id) !== String(filtroId)) return false;
+        return true;
       });
 
-      if (valFiltro) filtro.value = valFiltro;
-      if (empacadoras.length > 1 && !locSync.dataset.init) {
-        locSync.selectedIndex = 1;
-        locSync.dataset.init = "1";
-      }
-    }
+      contador.textContent = activos.length;
 
-    function renderListadoDispositivos() {
-      const filtroId = document.getElementById("filtro-hacienda-listado").value;
-      const tbody = document.getElementById("tbody-dispositivos");
-      const modSel = document.getElementById("sel-mod-sn");
-      const prevModSn = modSel.value;
-
-      const filtrados = filtroId
-        ? dispositivos.filter(d => String(d.empacadora_id) === String(filtroId))
-        : dispositivos;
-
-      tbody.innerHTML = filtrados.length ? "" : `<tr><td colspan="9">No hay dispositivos registrados.</td></tr>`;
-      modSel.innerHTML = "";
-
-      dispositivos.forEach(d => {
-        modSel.add(new Option(`${d.nombre} (${d.sn}) - ${d.empacadora_nombre || ""}`, d.sn));
-      });
-      if (prevModSn && dispositivos.some(d => d.sn === prevModSn)) {
-        modSel.value = prevModSn;
-      }
-
-      filtrados.forEach(d => {
-        const conectado = estaConectadoDispositivo(d);
-        const modo = d.tipo_conexion || "PULL_SDK";
-        const claseConn = conectado ? "conn-online" : "conn-offline";
-        const tr = document.createElement("tr");
-        tr.innerHTML = `
-          <td>${d.sn}</td>
-          <td>${d.nombre}</td>
-          <td>${d.empacadora_codigo || ""}</td>
-          <td>${d.empacadora_nombre || ""}</td>
-          <td>${d.rol || ""}</td>
-          <td><span class="conn-cell ${claseConn}">${modo}</span></td>
-          <td>${d.ip_address || ""}</td>
-          <td>${d.port || 4370}</td>
-          <td>${d.ultima_conexion || "-"}</td>
-        `;
-        tbody.appendChild(tr);
-      });
-    }
-
-    function cargarFormularioEdicion() {
-      const sn = document.getElementById("sel-mod-sn").value;
-      const d = dispositivos.find(x => x.sn === sn);
-      if (!d) return;
-      document.getElementById("mod-nombre").value = d.nombre || "";
-      document.getElementById("mod-rol").value = d.rol || "COMEDOR";
-      document.getElementById("mod-tipo-conexion").value = d.tipo_conexion || "PUSH_ADMS";
-      document.getElementById("mod-ip").value = d.ip_address || "";
-      document.getElementById("mod-puerto").value = d.port || 4370;
-    }
-
-    function renderSyncLocalidad() {
-      const empId = document.getElementById("sel-localidad-sync").value;
-      const aviso = document.getElementById("sync-localidad-aviso");
-      const lista = document.getElementById("sync-localidad-lista");
-      const btn = document.getElementById("btn-sync-localidad");
-
-      const conIp = dispositivos.filter(
-        d => String(d.empacadora_id) === String(empId) && d.ip_address && d.ip_address.trim() !== ""
-      );
-
-      if (!conIp.length) {
-        aviso.style.display = "block";
-        lista.style.display = "none";
-        btn.style.display = "none";
-      } else {
-        aviso.style.display = "none";
-        lista.style.display = "block";
-        btn.style.display = "inline-flex";
-        lista.innerHTML = conIp.map(d => `
-          <label class="check-row">
-            <input type="checkbox" class="chk-reloj-loc" value="${d.sn}" checked />
-            <span><strong>${d.nombre}</strong> (${d.rol}) — ${d.ip_address}:${d.port || 4370}</span>
-          </label>
-        `).join("");
-      }
-    }
-
-    function renderRelojObjetivo() {
-      const sel = document.getElementById("sel-reloj-objetivo");
-      sel.innerHTML = "";
-      dispositivos.forEach(d => {
-        const txt = `${d.nombre} (Área: ${d.rol}) - [${d.empacadora_codigo || ""}] ${d.empacadora_nombre || ""} (${d.ip_address || "sin IP"}:${d.port || 4370})`;
-        sel.add(new Option(txt, d.sn));
-      });
-      actualizarContextoRelojObjetivo();
-    }
-
-    function actualizarContextoRelojObjetivo() {
-      const sn = document.getElementById("sel-reloj-objetivo").value;
-      const reloj = dispositivos.find(d => d.sn === sn);
-      const area = reloj ? (reloj.rol || "COMEDOR") : "COMEDOR";
-      const empId = reloj ? reloj.empacadora_id : null;
-
-      document.getElementById("lbl-sube-area").innerHTML =
-        `Sube colaboradores autorizados en esta Hacienda y Área Física: <strong>${area}</strong>.`;
-      document.getElementById("txt-area-autorizados").textContent = area;
-
-      const autorizados = empleados.filter(
-        emp => (!empId || String(emp.empacadora_id) === String(empId)) &&
-               (!emp.area || String(emp.area).toUpperCase() === String(area).toUpperCase())
-      );
-      document.getElementById("num-autorizados-area").textContent = autorizados.length;
-
-      if (reloj) {
-        document.getElementById("txt-info-usuarios-reloj").textContent =
-          `Lee los usuarios almacenados en ${reloj.sn} (${reloj.ip_address || "sin IP"}:${reloj.port || 4370}). Marque el usuario que desea modificar para actualizar sus datos sin tocar marcaciones.`;
-      }
-    }
-
-    function renderColaboradoresSync() {
-      const sel = document.getElementById("sel-colaborador");
-      sel.innerHTML = "";
-      empleados.forEach(emp => {
-        const txt = `${emp.nombres} [PIN: ${emp.pin}] -> [${emp.empacadora_codigo || ""}] ${emp.empacadora_nombre || ""} (${emp.area || "GENERAL"})`;
-        sel.add(new Option(txt, emp.pin));
-      });
-      actualizarRelojesDestinoColaborador();
-    }
-
-    function actualizarRelojesDestinoColaborador() {
-      const pin = document.getElementById("sel-colaborador").value;
-      const emp = empleados.find(e => String(e.pin) === String(pin));
-      const out = document.getElementById("txt-relojes-destino");
-
-      if (!emp) {
-        out.textContent = "Relojes destino detectados (0): -";
+      if (!activos.length) {
+        tbody.innerHTML = `<tr><td colspan="7">No hay biométricos activos en este momento.</td></tr>`;
         return;
       }
 
-      const destinos = dispositivos.filter(
-        d => String(d.empacadora_id) === String(emp.empacadora_id) &&
-             (!emp.area || String(d.rol).toUpperCase() === String(emp.area).toUpperCase())
-      );
+      tbody.innerHTML = activos.map(d => `
+        <tr>
+          <td><span class="badge-activo">ACTIVO</span></td>
+          <td>${d.sn}</td>
+          <td>${d.nombre || ""}</td>
+          <td>${d.empacadora_codigo ? `[${d.empacadora_codigo}] ` : ""}${d.empacadora_nombre || ""}</td>
+          <td>${d.rol || ""}</td>
+          <td>${d.tipo_conexion || "PUSH_ADMS"}</td>
+          <td>${d.ultima_conexion || "-"}</td>
+        </tr>
+      `).join("");
+    }
 
-      if (!destinos.length) {
-        out.textContent = "Relojes destino detectados (0): ninguno coincide con Hacienda + Área";
-      } else {
-        const desc = destinos.map(
-          d => `${d.nombre} [${d.empacadora_codigo || ""}/${d.rol}] (${d.ip_address || "sin IP"})`
-        ).join(", ");
-        out.textContent = `Relojes destino detectados (${destinos.length}): ${desc}`;
+    async function cargarDatos() {
+      await cargarEstadoYEmpresa();
+      try {
+        const [resEmp, resDisp] = await Promise.all([
+          fetch("/api/empacadoras"),
+          fetch("/api/dispositivos")
+        ]);
+        if (resEmp.ok) empacadoras = await resEmp.json();
+        if (resDisp.ok) dispositivos = await resDisp.json();
+        renderFiltroHaciendas();
+        renderBiometricosActivos();
+      } catch (_) {
+        document.getElementById("tbody-biometricos-activos").innerHTML =
+          `<tr><td colspan="7">No se pudo cargar el listado de biométricos.</td></tr>`;
       }
     }
 
-    function renderMarcacionesRecientes(lista) {
-      const tbody = document.getElementById("tbody-marcaciones-recientes");
-      tbody.innerHTML = lista.length ? "" : `<tr><td colspan="5">Sin marcaciones recientes registradas.</td></tr>`;
-      lista.forEach(m => {
-        const tr = document.createElement("tr");
-        tr.innerHTML = `
-          <td>${m.pin_empleado}</td>
-          <td>${m.colaborador || "Desconocido / Sin Registro"}</td>
-          <td>${m.fecha_hora}</td>
-          <td>${m.dispositivo_origen || m.sn_dispositivo}</td>
-          <td>${m.hacienda_nombre || ""}</td>
-        `;
-        tbody.appendChild(tr);
-      });
-    }
+    document.getElementById("btn-refrescar-activos").addEventListener("click", cargarDatos);
+    document.getElementById("filtro-hacienda-activos").addEventListener("change", renderBiometricosActivos);
 
-    // Respaldos
-    async function cargarRespaldos() {
+    const btnClaude = document.getElementById("btn-enviar-claude");
+    const inputClaude = document.getElementById("claude-prompt-input");
+    const estadoClaude = document.getElementById("claude-prompt-estado");
+    const cajaRespuestaClaude = document.getElementById("claude-respuesta-box");
+
+    btnClaude.addEventListener("click", async () => {
+      const mensaje = (inputClaude.value || "").trim();
+      if (!mensaje) {
+        estadoClaude.textContent = "Escribe una consulta antes de enviar.";
+        return;
+      }
+
+      btnClaude.disabled = true;
+      estadoClaude.textContent = "Consultando a Claude...";
+      cajaRespuestaClaude.style.display = "none";
+
       try {
-        const res = await fetch("/api/respaldos/estado");
-        if (!res.ok) return;
+        const res = await fetch("/api/chat", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ mensaje })
+        });
         const data = await res.json();
-
-        const prog = data.programacion || {};
-        document.getElementById("prog-habilitado").checked = Boolean(prog.habilitado);
-        document.getElementById("prog-semanal").checked = Boolean(prog.repetir_semanal);
-        if (prog.fecha_hora) {
-          document.getElementById("prog-fecha-hora").value = prog.fecha_hora;
-        }
-
-        const infoBox = document.getElementById("info-prog-actual");
-        if (prog.habilitado && prog.fecha_hora) {
-          infoBox.textContent = `Programado para: ${prog.fecha_hora.replace("T", " ")} | Último estado: ${prog.ultimo_estado || "Pendiente"}`;
-        } else {
-          infoBox.textContent = `Base activa: ${data.base_datos} | Último estado: ${prog.ultimo_estado || "Sin ejecución programada"}`;
-        }
-
-        const sel = document.getElementById("sel-archivo-restaurar");
-        const tbody = document.getElementById("tbody-respaldos");
-        sel.innerHTML = "";
-        tbody.innerHTML = "";
-
-        const archivos = data.archivos || [];
-        if (!archivos.length) {
-          sel.add(new Option("No hay respaldos disponibles", ""));
-          tbody.innerHTML = `<tr><td colspan="3">Aún no se han generado respaldos.</td></tr>`;
+        if (!res.ok) {
+          estadoClaude.textContent = data.detail || data.mensaje || "No se pudo procesar la consulta.";
           return;
         }
-
-        archivos.forEach(a => {
-          sel.add(new Option(`${a.archivo} (${a.tamano_kb} KB)`, a.archivo));
-          const tr = document.createElement("tr");
-          tr.innerHTML = `<td>${a.archivo}</td><td>${a.tamano_kb}</td><td>${a.modificado_en}</td>`;
-          tbody.appendChild(tr);
-        });
+        cajaRespuestaClaude.textContent = data.respuesta || "(Sin respuesta)";
+        cajaRespuestaClaude.style.display = "block";
+        estadoClaude.textContent = "Consulta completada.";
       } catch (err) {
-        mostrarEstadoRespaldo("No se pudo cargar el estado de respaldos: " + err.message, true);
+        estadoClaude.textContent = "Error de conexión: " + err.message;
+      } finally {
+        btnClaude.disabled = false;
       }
-    }
-
-    // Eventos Dispositivos
-    document.getElementById("btn-refrescar-estado").addEventListener("click", cargarTodo);
-    document.getElementById("filtro-hacienda-listado").addEventListener("change", renderListadoDispositivos);
-    document.getElementById("sel-mod-sn").addEventListener("change", cargarFormularioEdicion);
-    document.getElementById("sel-localidad-sync").addEventListener("change", renderSyncLocalidad);
-    document.getElementById("sel-reloj-objetivo").addEventListener("change", actualizarContextoRelojObjetivo);
-    document.getElementById("sel-colaborador").addEventListener("change", actualizarRelojesDestinoColaborador);
-
-    document.getElementById("btn-guardar-dispositivo").addEventListener("click", async () => {
-      const payload = {
-        sn: document.getElementById("reg-sn").value.trim(),
-        nombre: document.getElementById("reg-nombre").value.trim(),
-        empacadora_id: Number(document.getElementById("reg-hacienda").value),
-        rol: document.getElementById("reg-rol").value,
-        tipo_conexion: document.getElementById("reg-tipo-conexion").value,
-        ip_address: document.getElementById("reg-ip").value.trim() || null,
-        port: Number(document.getElementById("reg-puerto").value || 4370)
-      };
-      const res = await fetch("/api/dispositivos", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload)
-      });
-      const data = await res.json();
-      mostrarEstado(data.mensaje || "Dispositivo guardado.", !res.ok);
-      await cargarTodo();
     });
 
-    document.getElementById("btn-actualizar-dispositivo").addEventListener("click", async () => {
-      const sn = document.getElementById("sel-mod-sn").value;
-      if (!sn) return;
-      const payload = {
-        sn,
-        nombre: document.getElementById("mod-nombre").value.trim(),
-        rol: document.getElementById("mod-rol").value,
-        tipo_conexion: document.getElementById("mod-tipo-conexion").value,
-        ip_address: document.getElementById("mod-ip").value.trim() || null,
-        port: Number(document.getElementById("mod-puerto").value || 4370)
-      };
-      const res = await fetch(`/api/dispositivos/${encodeURIComponent(sn)}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload)
-      });
-      const data = await res.json();
-      mostrarEstado(data.mensaje || "Dispositivo actualizado.", !res.ok);
-      await cargarTodo();
-    });
-
-    document.getElementById("btn-eliminar-dispositivo").addEventListener("click", async () => {
-      const sn = document.getElementById("sel-mod-sn").value;
-      if (!sn) return;
-      const res = await fetch(`/api/dispositivos/${encodeURIComponent(sn)}`, { method: "DELETE" });
-      const data = await res.json();
-      mostrarEstado(data.mensaje || "Dispositivo eliminado.", !res.ok);
-      await cargarTodo();
-    });
-
-    document.getElementById("btn-sync-localidad").addEventListener("click", async () => {
-      const sns = Array.from(document.querySelectorAll(".chk-reloj-loc:checked")).map(c => c.value);
-      if (!sns.length) {
-        mostrarEstado("Seleccione al menos un reloj de la localidad.", true);
-        return;
-      }
-      mostrarEstado(`Sincronizando ${sns.length} biométrico(s) seleccionado(s)...`);
-      const res = await fetch("/api/pull/sincronizar-seleccionados", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sns })
-      });
-      const data = await res.json();
-      mostrarEstado(data.mensaje || "Sincronización por localidad completada.", !res.ok);
-      await cargarTodo();
-    });
-
-    document.getElementById("btn-descargar-marcaciones").addEventListener("click", async () => {
-      const sn = document.getElementById("sel-reloj-objetivo").value;
-      if (!sn) return;
-      mostrarEstado("Descargando marcaciones desde el biométrico...");
-      const res = await fetch(`/api/pull/descargar-marcaciones/${encodeURIComponent(sn)}`, { method: "POST" });
-      const data = await res.json();
-      mostrarEstado(data.mensaje || "Proceso completado.", !res.ok);
-      await cargarTodo();
-    });
-
-    document.getElementById("btn-enviar-base-empleados").addEventListener("click", async () => {
-      const sn = document.getElementById("sel-reloj-objetivo").value;
-      if (!sn) return;
-      mostrarEstado("Enviando empleados autorizados al biométrico...");
-      const res = await fetch(`/api/pull/enviar-empleados/${encodeURIComponent(sn)}`, { method: "POST" });
-      const data = await res.json();
-      mostrarEstado(data.mensaje || "Proceso completado.", !res.ok);
-    });
-
-    document.getElementById("btn-sync-colaborador").addEventListener("click", async () => {
-      const pin = document.getElementById("sel-colaborador").value;
-      if (!pin) return;
-      mostrarEstado("Sincronizando colaborador en relojes autorizados...");
-      const res = await fetch("/api/pull/sincronizar-colaborador", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ pin })
-      });
-      const data = await res.json();
-      mostrarEstado(data.mensaje || "Sincronización finalizada.", !res.ok);
-    });
-
-    document.getElementById("btn-consultar-usuarios").addEventListener("click", async () => {
-      const sn = document.getElementById("sel-reloj-objetivo").value;
-      if (!sn) return;
-      mostrarEstado("Consultando usuarios almacenados en el biométrico...");
-      const res = await fetch(`/api/pull/usuarios/${encodeURIComponent(sn)}`);
-      const data = await res.json();
-      if (!res.ok) {
-        mostrarEstado(data.detail || data.mensaje || "No se pudo consultar el reloj.", true);
-        return;
-      }
-      const panel = document.getElementById("panel-usuarios-reloj");
-      const tbody = document.getElementById("tbody-usuarios-reloj");
-      panel.style.display = "block";
-      tbody.innerHTML = "";
-      (data.usuarios || []).forEach((u, idx) => {
-        const tr = document.createElement("tr");
-        tr.innerHTML = `
-          <td><input type="radio" name="usr-sel" value="${u.uid}" data-nombre="${u.nombre}" data-card="${u.card || 0}" ${idx === 0 ? "checked" : ""} /></td>
-          <td>${u.pin}</td>
-          <td>${u.nombre}</td>
-          <td>${u.card || 0}</td>
-          <td>${u.privilege || 0}</td>
-        `;
-        tbody.appendChild(tr);
-      });
-      const primero = document.querySelector('input[name="usr-sel"]:checked');
-      if (primero) {
-        document.getElementById("edit-usr-nombre").value = primero.dataset.nombre || "";
-        document.getElementById("edit-usr-card").value = primero.dataset.card || "0";
-      }
-      mostrarEstado(`Usuarios cargados desde ${sn}: ${(data.usuarios || []).length}`);
-    });
-
-    document.getElementById("btn-guardar-usuario-reloj").addEventListener("click", async () => {
-      const sn = document.getElementById("sel-reloj-objetivo").value;
-      const sel = document.querySelector('input[name="usr-sel"]:checked');
-      if (!sn || !sel) return;
-      const res = await fetch(`/api/pull/usuarios/${encodeURIComponent(sn)}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          uid: Number(sel.value),
-          nombre: document.getElementById("edit-usr-nombre").value.trim(),
-          card: Number(document.getElementById("edit-usr-card").value || 0)
-        })
-      });
-      const data = await res.json();
-      mostrarEstado(data.mensaje || "Usuario actualizado sin alterar marcaciones.", !res.ok);
-    });
-
-    document.getElementById("btn-probar-ip").addEventListener("click", async () => {
-      const ip = document.getElementById("scan-ip").value.trim();
-      const port = Number(document.getElementById("scan-puerto").value || 4370);
-      const res = await fetch(`/api/red/probar-tcp?ip=${encodeURIComponent(ip)}&port=${port}`);
-      const data = await res.json();
-      document.getElementById("resultado-scan").textContent = data.mensaje || "";
-    });
-
-    // Eventos Respaldos
-    document.getElementById("btn-guardar-prog").addEventListener("click", async () => {
-      const payload = {
-        habilitado: document.getElementById("prog-habilitado").checked,
-        fecha_hora: document.getElementById("prog-fecha-hora").value,
-        repetir_semanal: document.getElementById("prog-semanal").checked
-      };
-      const res = await fetch("/api/respaldos/programar", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload)
-      });
-      const data = await res.json();
-      mostrarEstadoRespaldo(data.mensaje || "Programación guardada.", !res.ok);
-      await cargarRespaldos();
-    });
-
-    document.getElementById("btn-respaldo-ahora").addEventListener("click", async () => {
-      mostrarEstadoRespaldo("Generando copia de seguridad...");
-      const res = await fetch("/api/respaldos/crear", { method: "POST" });
-      const data = await res.json();
-      mostrarEstadoRespaldo(data.mensaje || data.detail || "Respaldo completado.", !res.ok);
-      await cargarRespaldos();
-    });
-
-    document.getElementById("btn-restaurar-bd").addEventListener("click", async () => {
-      const archivo = document.getElementById("sel-archivo-restaurar").value;
-      if (!archivo) {
-        mostrarEstadoRespaldo("Seleccione un archivo de respaldo para restaurar.", true);
-        return;
-      }
-      mostrarEstadoRespaldo(`Restaurando base de datos desde ${archivo}...`);
-      const res = await fetch("/api/respaldos/restaurar", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ archivo })
-      });
-      const data = await res.json();
-      mostrarEstadoRespaldo(data.mensaje || data.detail || "Restauración completada.", !res.ok);
-    });
-
-    cargarTodo();
-    cargarRespaldos();
+    cargarDatos();
   </script>
 </body>
 </html>

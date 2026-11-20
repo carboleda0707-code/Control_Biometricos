@@ -31,6 +31,10 @@ class Settings:
 
         self.DEBUG = self._get_bool("DEFAULT", "DEBUG", False)
         self.TIMEZONE = self._get("DEFAULT", "TIMEZONE", "America/Guayaquil")
+        self.EMPRESA_NOMBRE = (
+            os.getenv("EMPRESA_NOMBRE")
+            or self._get("DEFAULT", "EMPRESA_NOMBRE", "")
+        ).strip()
 
         self.SERVER_HOST = self._get("SERVER", "HOST", "0.0.0.0")
         self.SERVER_PORT = self._get_int("SERVER", "PORT", 8081)
