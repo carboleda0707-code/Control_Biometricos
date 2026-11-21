@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 import asyncio
+from contextlib import contextmanager
 from datetime import date, datetime, timedelta
 import json
 import os
@@ -8,7 +9,8 @@ import re
 import socket
 import subprocess
 import sys
-from typing import List, Optional
+import threading
+from typing import Any, List, Optional
 
 import anthropic
 from fastapi import FastAPI, HTTPException, Query, Request
@@ -24,9 +26,30 @@ from excel_engine import generar_excel_comedor
 app = FastAPI(title="Control Biométrico & Comedores")
 
 
+@contextmanager
+def db_cursor(autocommit: bool = False):
+    conn = get_conn()
+    cur = conn.cursor()
+    try:
+        yield cur
+        if autocommit:
+            conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        cur.close()
+        conn.close()
+
+
 def _rows_to_dicts(cur, rows) -> list[dict]:
     cols = [d[0] for d in (cur.description or [])]
     return [dict(zip(cols, row)) for row in rows]
+
+
+def _limpiar_sn(sn: str | None) -> str | None:
+    val = (sn or "").strip()
+    return val or None
 
 
 def _normalizar_pin(pin_raw: str) -> str:
@@ -40,24 +63,20 @@ def _normalizar_pin(pin_raw: str) -> str:
 
 def _limpiar_nombre_zk(nombre_raw: str, pin_fallback: str) -> str:
     """Limpia caracteres extraños de firmwares ZKTeco; si queda vacío, usa placeholder."""
-    txt = str(nombre_raw or "").strip()
-    txt = re.sub(r"[^\w\s\.\-ÁÉÍÓÚÑáéíóúñ]", "", txt).strip()
+    txt = re.sub(r"[^\w\s\.\-ÁÉÍÓÚÑáéíóúñ]", "", str(nombre_raw or "").strip()).strip()
     if not txt or txt.isdigit():
         return f"SIN NOMBRE ({pin_fallback})"
     return txt.upper()[:24]
 
 
 def _actualizar_ultima_conexion(cur, sn: str | None) -> None:
-    """Actualiza la fecha de última conexión del biométrico si viene informado el SN."""
-    if sn and sn.strip():
-        cur.execute(
-            "UPDATE dispositivos SET ultima_conexion = NOW() WHERE sn = %s;",
-            (sn.strip(),),
-        )
+    sn_clean = _limpiar_sn(sn)
+    if sn_clean:
+        cur.execute("UPDATE dispositivos SET ultima_conexion = NOW() WHERE sn = %s;", (sn_clean,))
 
 
 def _asegurar_tabla_comandos(cur) -> None:
-    """Crea la tabla de cola de comandos ADMS si aún no existe."""
+    """Crea la tabla e índice de cola de comandos ADMS si aún no existen."""
     cur.execute("""
         CREATE TABLE IF NOT EXISTS comandos_adms (
             id SERIAL PRIMARY KEY,
@@ -76,16 +95,20 @@ def _asegurar_tabla_comandos(cur) -> None:
     """)
 
 
+def _preparar_entorno_adms(cur, sn: str | None) -> str | None:
+    _asegurar_tabla_comandos(cur)
+    sn_clean = _limpiar_sn(sn)
+    _actualizar_ultima_conexion(cur, sn_clean)
+    return sn_clean
+
+
 def encolar_comando_usuario_adms(
     pin: str,
     nombres: str,
     permisos_hacienda_area: list[tuple[int, str]],
     activo: bool = True,
 ) -> int:
-    """
-    Encola comandos ADMS para relojes PUSH_ADMS que coincidan con
-    (empacadora_id, area_autorizada) del empleado.
-    """
+    """Encola comandos ADMS para relojes PUSH_ADMS según (empacadora_id, area_autorizada)."""
     pin_norm = _normalizar_pin(pin)
     if not pin_norm or pin_norm == "0":
         return 0
@@ -98,66 +121,50 @@ def encolar_comando_usuario_adms(
     )
 
     encolados = 0
-    conn = get_conn()
-    cur = conn.cursor()
     try:
-        _asegurar_tabla_comandos(cur)
-        for emp_id, area in (permisos_hacienda_area or []):
-            if emp_id is None or not str(area or "").strip():
-                continue
-            cur.execute("""
-                SELECT sn
-                FROM dispositivos
-                WHERE tipo_conexion = 'PUSH_ADMS'
-                  AND empacadora_id = %s
-                  AND UPPER(TRIM(rol)) = UPPER(TRIM(%s))
-                  AND sn IS NOT NULL
-                  AND TRIM(sn) <> '';
-            """, (int(emp_id), str(area).strip()))
-
-            for (sn_dev,) in cur.fetchall():
-                cur.execute(
-                    "INSERT INTO comandos_adms (sn, comando, estado) VALUES (%s, %s, 'PENDIENTE');",
-                    (sn_dev.strip(), comando_zk),
-                )
-                encolados += 1
-        conn.commit()
+        with db_cursor(autocommit=True) as cur:
+            _asegurar_tabla_comandos(cur)
+            for emp_id, area in permisos_hacienda_area or []:
+                area_clean = str(area or "").strip()
+                if emp_id is None or not area_clean:
+                    continue
+                cur.execute("""
+                    SELECT sn
+                    FROM dispositivos
+                    WHERE tipo_conexion = 'PUSH_ADMS'
+                      AND empacadora_id = %s
+                      AND UPPER(TRIM(rol)) = UPPER(TRIM(%s))
+                      AND sn IS NOT NULL
+                      AND TRIM(sn) <> '';
+                """, (int(emp_id), area_clean))
+                for (sn_dev,) in cur.fetchall():
+                    cur.execute(
+                        "INSERT INTO comandos_adms (sn, comando, estado) VALUES (%s, %s, 'PENDIENTE');",
+                        (sn_dev.strip(), comando_zk),
+                    )
+                    encolados += 1
     except Exception as e:
-        conn.rollback()
         print(f"[ADMS QUEUE ERROR] PIN={pin_norm}: {e}")
-    finally:
-        cur.close()
-        conn.close()
 
     return encolados
 
 
 def _obtener_info_dispositivo(cur, sn: str | None) -> tuple[int | None, str | None]:
-    """Obtiene (empacadora_id, rol/area) asociados al SN del dispositivo."""
     if not sn:
         return None, None
-    cur.execute(
-        "SELECT empacadora_id, rol FROM dispositivos WHERE sn = %s LIMIT 1;",
-        (sn,),
-    )
+    cur.execute("SELECT empacadora_id, rol FROM dispositivos WHERE sn = %s LIMIT 1;", (sn,))
     row = cur.fetchone()
     if not row:
         return None, None
-    emp_id = int(row[0]) if row[0] is not None else None
-    area = str(row[1]).strip() if row[1] else None
-    return emp_id, area
+    return (int(row[0]) if row[0] is not None else None, str(row[1]).strip() if row[1] else None)
 
 
 def _extraer_usuario_adms(linea: str) -> tuple[str | None, str]:
-    """Extrae (pin, nombre) desde líneas ADMS de usuario (USER PIN=... Name=...)."""
     m_pin = re.search(r"(?:^|[\s\t])PIN=([^\t\r\n]+)", linea, re.IGNORECASE)
     if not m_pin:
         return None, ""
-    pin_raw = m_pin.group(1).strip()
-
     m_name = re.search(r"(?:^|[\s\t])Name=([^\t\r\n]*)", linea, re.IGNORECASE)
-    name_raw = m_name.group(1).strip() if m_name else ""
-    return pin_raw, name_raw
+    return m_pin.group(1).strip(), (m_name.group(1).strip() if m_name else "")
 
 
 def _guardar_empleado_desde_reloj(
@@ -202,28 +209,22 @@ def _guardar_empleado_desde_reloj(
 
 
 def _confirmar_comandos_desde_texto(cur, sn: str | None, texto: str) -> None:
-    """Marca comandos como CONFIRMADO cuando el reloj reporta retorno de ejecución."""
     if not texto:
         return
-    matches = re.findall(r"\bID[=:]\s*(\d+)", texto, re.IGNORECASE)
-    for cmd_id_str in matches:
+    for cmd_id_str in re.findall(r"\bID[=:]\s*(\d+)", texto, re.IGNORECASE):
         cmd_id = int(cmd_id_str)
+        sql = """
+            UPDATE comandos_adms
+            SET estado = 'CONFIRMADO',
+                respuesta_reloj = %s,
+                confirmado_en = NOW()
+            WHERE id = %s
+        """
+        params: list[Any] = [texto.strip()[:250], cmd_id]
         if sn:
-            cur.execute("""
-                UPDATE comandos_adms
-                SET estado = 'CONFIRMADO',
-                    respuesta_reloj = %s,
-                    confirmado_en = NOW()
-                WHERE id = %s AND sn = %s;
-            """, (texto.strip()[:250], cmd_id, sn))
-        else:
-            cur.execute("""
-                UPDATE comandos_adms
-                SET estado = 'CONFIRMADO',
-                    respuesta_reloj = %s,
-                    confirmado_en = NOW()
-                WHERE id = %s;
-            """, (texto.strip()[:250], cmd_id))
+            sql += " AND sn = %s"
+            params.append(sn)
+        cur.execute(sql + ";", tuple(params))
 
 
 # ==============================================================================
@@ -259,10 +260,7 @@ def _cargar_programacion() -> dict:
 
 
 def _guardar_programacion(data: dict) -> None:
-    _archivo_programacion().write_text(
-        json.dumps(data, ensure_ascii=False, indent=2),
-        encoding="utf-8",
-    )
+    _archivo_programacion().write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
 def _binario_pg(nombre_binario: str) -> str:
@@ -274,30 +272,33 @@ def _binario_pg(nombre_binario: str) -> str:
     return nombre_binario
 
 
+def _ejecutar_comando_pg(args: list[str], error_fallback: str) -> None:
+    env = os.environ.copy()
+    if settings.DB_PASSWORD:
+        env["PGPASSWORD"] = settings.DB_PASSWORD
+    proc = subprocess.run(args, env=env, capture_output=True, text=True, timeout=300)
+    if proc.returncode != 0:
+        raise RuntimeError(proc.stderr.strip() or error_fallback)
+
+
 def ejecutar_pg_dump() -> dict:
     """Genera un respaldo comprimido (.dump) de la base de datos configurada."""
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     nombre_archivo = f"{settings.DB_NAME}_{timestamp}.dump"
     destino = _carpeta_respaldos() / nombre_archivo
 
-    env = os.environ.copy()
-    if settings.DB_PASSWORD:
-        env["PGPASSWORD"] = settings.DB_PASSWORD
-
-    cmd = [
-        _binario_pg("pg_dump"),
-        "-h", str(settings.DB_HOST),
-        "-p", str(settings.DB_PORT),
-        "-U", str(settings.DB_USER),
-        "-Fc",
-        "-b",
-        "-f", str(destino),
-        str(settings.DB_NAME),
-    ]
-
-    proc = subprocess.run(cmd, env=env, capture_output=True, text=True, timeout=300)
-    if proc.returncode != 0:
-        raise RuntimeError(proc.stderr.strip() or "Error ejecutando pg_dump")
+    _ejecutar_comando_pg(
+        [
+            _binario_pg("pg_dump"),
+            "-h", str(settings.DB_HOST),
+            "-p", str(settings.DB_PORT),
+            "-U", str(settings.DB_USER),
+            "-Fc", "-b",
+            "-f", str(destino),
+            str(settings.DB_NAME),
+        ],
+        "Error ejecutando pg_dump",
+    )
 
     size_kb = round(destino.stat().st_size / 1024, 2) if destino.exists() else 0.0
     return {
@@ -311,28 +312,21 @@ def ejecutar_pg_restore(nombre_archivo: str) -> dict:
     """Restaura un archivo .dump sobre la base de datos configurada."""
     base = _carpeta_respaldos().resolve()
     archivo_resuelto = (base / Path(nombre_archivo).name).resolve()
-
     if not archivo_resuelto.exists() or archivo_resuelto.parent != base:
         raise FileNotFoundError("El archivo de respaldo seleccionado no existe.")
 
-    env = os.environ.copy()
-    if settings.DB_PASSWORD:
-        env["PGPASSWORD"] = settings.DB_PASSWORD
-
-    cmd = [
-        _binario_pg("pg_restore"),
-        "-h", str(settings.DB_HOST),
-        "-p", str(settings.DB_PORT),
-        "-U", str(settings.DB_USER),
-        "-d", str(settings.DB_NAME),
-        "--clean",
-        "--if-exists",
-        str(archivo_resuelto),
-    ]
-
-    proc = subprocess.run(cmd, env=env, capture_output=True, text=True, timeout=300)
-    if proc.returncode != 0:
-        raise RuntimeError(proc.stderr.strip() or "Error ejecutando pg_restore")
+    _ejecutar_comando_pg(
+        [
+            _binario_pg("pg_restore"),
+            "-h", str(settings.DB_HOST),
+            "-p", str(settings.DB_PORT),
+            "-U", str(settings.DB_USER),
+            "-d", str(settings.DB_NAME),
+            "--clean", "--if-exists",
+            str(archivo_resuelto),
+        ],
+        "Error ejecutando pg_restore",
+    )
 
     return {
         "archivo": archivo_resuelto.name,
@@ -343,8 +337,8 @@ def ejecutar_pg_restore(nombre_archivo: str) -> dict:
 async def worker_respaldo_programado() -> None:
     """Revisa periódicamente si llegó la fecha y hora programada para generar respaldo."""
     while True:
+        prog = _cargar_programacion()
         try:
-            prog = _cargar_programacion()
             if prog.get("habilitado") and prog.get("fecha_hora"):
                 objetivo = datetime.fromisoformat(prog["fecha_hora"])
                 ahora = datetime.now()
@@ -355,37 +349,49 @@ async def worker_respaldo_programado() -> None:
                     prog["ultima_ejecucion"] = clave_ejecucion
                     prog["ultimo_estado"] = f"OK ({info['archivo']})"
                     if prog.get("repetir_semanal"):
-                        siguiente = objetivo + timedelta(days=7)
-                        prog["fecha_hora"] = siguiente.strftime("%Y-%m-%dT%H:%M")
+                        prog["fecha_hora"] = (objetivo + timedelta(days=7)).strftime("%Y-%m-%dT%H:%M")
                     else:
                         prog["habilitado"] = False
                     _guardar_programacion(prog)
         except Exception as e:
-            prog = _cargar_programacion()
             prog["ultimo_estado"] = f"Error: {e}"
             _guardar_programacion(prog)
 
         await asyncio.sleep(20)
 
 
+# ==============================================================================
+# RÉPLICA AUTOMÁTICA A RAILWAY AL INICIAR EL SISTEMA
+# ==============================================================================
+def _iniciar_replicador_railway() -> None:
+    habilitado = os.getenv("RAILWAY_AUTO_REPLICA", "true").strip().lower()
+    if habilitado in ("0", "false", "no", "off"):
+        print("[RAILWAY AUTO-REPLICA] Deshabilitada por variable RAILWAY_AUTO_REPLICA.")
+        return
+
+    from replicar_a_railway import ejecutar_replica_automatica_loop
+
+    threading.Thread(
+        target=ejecutar_replica_automatica_loop,
+        name="hilo-replicar-railway",
+        daemon=True,
+    ).start()
+    print("[RAILWAY AUTO-REPLICA] Iniciada automáticamente en segundo plano.")
+
+
 @app.on_event("startup")
 def startup():
     init_db()
-    conn = get_conn()
-    cur = conn.cursor()
     try:
-        _asegurar_tabla_comandos(cur)
-        conn.commit()
+        with db_cursor(autocommit=True) as cur:
+            _asegurar_tabla_comandos(cur)
     except Exception as e:
-        conn.rollback()
         print(f"[DB] Error asegurando comandos_adms: {e}")
-    finally:
-        cur.close()
-        conn.close()
+
+    _iniciar_replicador_railway()
 
     try:
-        loop = asyncio.get_running_loop()
-        loop.create_task(worker_respaldo_programado())
+        asyncio.get_running_loop().create_task(worker_respaldo_programado())
     except RuntimeError:
         pass
 
@@ -394,22 +400,14 @@ def _resolver_nombre_empresa() -> str:
     empresa = (getattr(settings, "EMPRESA_NOMBRE", "") or "").strip()
     if empresa:
         return empresa
-    conn = None
-    cur = None
     try:
-        conn = get_conn()
-        cur = conn.cursor()
-        cur.execute("SELECT nombre FROM companias WHERE activa = TRUE ORDER BY id ASC LIMIT 1;")
-        row = cur.fetchone()
-        if row and row[0]:
-            return str(row[0]).strip()
+        with db_cursor() as cur:
+            cur.execute("SELECT nombre FROM companias WHERE activa = TRUE ORDER BY id ASC LIMIT 1;")
+            row = cur.fetchone()
+            if row and row[0]:
+                return str(row[0]).strip()
     except Exception:
         pass
-    finally:
-        if cur is not None:
-            cur.close()
-        if conn is not None:
-            conn.close()
     return ""
 
 
@@ -430,17 +428,11 @@ def estado_sistema():
 # ==============================================================================
 @app.get("/iclock/cdata", response_class=PlainTextResponse)
 async def adms_handshake(SN: str = Query(...)):
-    conn = get_conn()
-    cur = conn.cursor()
     try:
-        _asegurar_tabla_comandos(cur)
-        _actualizar_ultima_conexion(cur, SN)
-        conn.commit()
+        with db_cursor(autocommit=True) as cur:
+            _preparar_entorno_adms(cur, SN)
     except Exception:
-        conn.rollback()
-    finally:
-        cur.close()
-        conn.close()
+        pass
 
     return (
         f"GET OPTION FROM: {SN}\n"
@@ -461,161 +453,126 @@ async def adms_receive_data(request: Request, SN: str = Query(...), table: str =
     body_bytes = await request.body()
     raw_text = body_bytes.decode("utf-8", errors="ignore").strip()
     query_str = str(request.query_params).lower()
-    sn_clean = SN.strip() if SN and SN.strip() else None
+    sn_clean = _limpiar_sn(SN)
 
     if raw_text:
         print(f"[ADMS POST] SN={sn_clean} | table={table or query_str} | lineas={len(raw_text.splitlines())}")
 
-    conn = get_conn()
-    cur = conn.cursor()
     insertados = 0
     try:
-        _asegurar_tabla_comandos(cur)
-        _actualizar_ultima_conexion(cur, sn_clean)
+        with db_cursor(autocommit=True) as cur:
+            _preparar_entorno_adms(cur, sn_clean)
 
-        if "ID=" in raw_text.upper() or "ID=" in query_str.upper():
-            _confirmar_comandos_desde_texto(cur, sn_clean, f"{query_str} {raw_text}")
+            if "ID=" in raw_text.upper() or "ID=" in query_str.upper():
+                _confirmar_comandos_desde_texto(cur, sn_clean, f"{query_str} {raw_text}")
 
-        cur.execute("SELECT pin FROM empleados;")
-        mapa_pin_existente: dict[str, str] = {}
-        for (pin_db,) in cur.fetchall():
-            p_clean = str(pin_db or "").strip()
-            if p_clean:
-                p_norm = _normalizar_pin(p_clean)
-                mapa_pin_existente.setdefault(p_norm, p_clean)
+            cur.execute("SELECT pin FROM empleados;")
+            mapa_pin_existente: dict[str, str] = {}
+            for (pin_db,) in cur.fetchall():
+                p_clean = str(pin_db or "").strip()
+                if p_clean:
+                    mapa_pin_existente.setdefault(_normalizar_pin(p_clean), p_clean)
 
-        if raw_text:
-            es_tabla_usuarios = (
-                table.upper() in ("OPERLOG", "USERINFO")
-                or "table=operlog" in query_str
-                or "table=userinfo" in query_str
-            )
-            es_attlog = (table.upper() == "ATTLOG") or ("table=attlog" in query_str)
+            if raw_text:
+                es_tabla_usuarios = (
+                    table.upper() in ("OPERLOG", "USERINFO")
+                    or "table=operlog" in query_str
+                    or "table=userinfo" in query_str
+                )
+                es_attlog = (table.upper() == "ATTLOG") or ("table=attlog" in query_str)
 
-            for line in raw_text.splitlines():
-                linea_limpia = line.strip()
-                if not linea_limpia:
-                    continue
+                for line in raw_text.splitlines():
+                    linea_limpia = line.strip()
+                    if not linea_limpia:
+                        continue
 
-                if es_tabla_usuarios or ("PIN=" in linea_limpia and not es_attlog):
-                    if "PIN=" in linea_limpia:
+                    if es_tabla_usuarios or ("PIN=" in linea_limpia and not es_attlog):
                         pin_raw, name_raw = _extraer_usuario_adms(linea_limpia)
                         if pin_raw:
                             try:
                                 cur.execute("SAVEPOINT sp_usuario_adms;")
-                                _guardar_empleado_desde_reloj(
-                                    cur, pin_raw, name_raw, sn_clean, mapa_pin_existente
-                                )
+                                _guardar_empleado_desde_reloj(cur, pin_raw, name_raw, sn_clean, mapa_pin_existente)
                                 cur.execute("RELEASE SAVEPOINT sp_usuario_adms;")
                                 print(f"[ADMS USER] Sincronizado PIN={pin_raw} ({name_raw}) desde SN={sn_clean}")
                             except Exception as e:
                                 cur.execute("ROLLBACK TO SAVEPOINT sp_usuario_adms;")
                                 print(f"[ADMS ERROR] Usuario PIN={pin_raw}: {e}")
-                    continue
-
-                parts = linea_limpia.split("\t")
-                if len(parts) >= 2:
-                    pin_raw = parts[0].strip()
-                    fecha_hora = parts[1].strip()
-                    status = int(parts[2].strip()) if len(parts) > 2 and parts[2].strip().isdigit() else 1
-                    pin_norm = _normalizar_pin(pin_raw)
-                    if not pin_norm:
                         continue
-                    pin_destino = mapa_pin_existente.get(pin_norm, pin_norm)
-                    try:
-                        cur.execute("SAVEPOINT sp_marcacion_adms;")
-                        cur.execute("""
-                            INSERT INTO marcaciones (pin_empleado, fecha_hora, sn_dispositivo, estado_verificacion)
-                            VALUES (%s, %s, %s, %s)
-                            ON CONFLICT ON CONSTRAINT uq_marcacion_unica DO NOTHING;
-                        """, (pin_destino, fecha_hora, sn_clean, status))
-                        insertados += cur.rowcount
-                        cur.execute("RELEASE SAVEPOINT sp_marcacion_adms;")
-                    except Exception as e:
-                        cur.execute("ROLLBACK TO SAVEPOINT sp_marcacion_adms;")
-                        print(f"[ADMS ERROR] SN={SN} Linea='{line}' Err={e}")
 
-        conn.commit()
+                    parts = linea_limpia.split("\t")
+                    if len(parts) >= 2:
+                        pin_norm = _normalizar_pin(parts[0].strip())
+                        fecha_hora = parts[1].strip()
+                        status = int(parts[2].strip()) if len(parts) > 2 and parts[2].strip().isdigit() else 1
+                        if not pin_norm:
+                            continue
+                        try:
+                            cur.execute("SAVEPOINT sp_marcacion_adms;")
+                            cur.execute("""
+                                INSERT INTO marcaciones (pin_empleado, fecha_hora, sn_dispositivo, estado_verificacion)
+                                VALUES (%s, %s, %s, %s)
+                                ON CONFLICT ON CONSTRAINT uq_marcacion_unica DO NOTHING;
+                            """, (mapa_pin_existente.get(pin_norm, pin_norm), fecha_hora, sn_clean, status))
+                            insertados += cur.rowcount
+                            cur.execute("RELEASE SAVEPOINT sp_marcacion_adms;")
+                        except Exception as e:
+                            cur.execute("ROLLBACK TO SAVEPOINT sp_marcacion_adms;")
+                            print(f"[ADMS ERROR] SN={SN} Linea='{line}' Err={e}")
     except Exception as e:
-        conn.rollback()
         print(f"[ADMS BATCH ERROR] {e}")
-    finally:
-        cur.close()
-        conn.close()
 
     return f"OK: {insertados}"
 
 
 @app.get("/iclock/getrequest", response_class=PlainTextResponse)
 async def adms_get_request(SN: str = Query(...)):
-    sn_clean = SN.strip() if SN and SN.strip() else None
+    sn_clean = _limpiar_sn(SN)
     respuesta = "OK"
 
-    conn = get_conn()
-    cur = conn.cursor()
     try:
-        _asegurar_tabla_comandos(cur)
-        _actualizar_ultima_conexion(cur, sn_clean)
+        with db_cursor(autocommit=True) as cur:
+            _preparar_entorno_adms(cur, sn_clean)
 
-        if sn_clean:
-            cur.execute("""
-                SELECT id, comando
-                FROM comandos_adms
-                WHERE sn = %s AND estado = 'PENDIENTE'
-                ORDER BY id ASC
-                LIMIT 20;
-            """, (sn_clean,))
-            filas = cur.fetchall()
-
-            if filas:
-                lineas_cmd = []
-                ids_enviados = []
-                for cmd_id, cmd_txt in filas:
-                    lineas_cmd.append(f"C:{cmd_id}:{cmd_txt}")
-                    ids_enviados.append(cmd_id)
-
+            if sn_clean:
                 cur.execute("""
-                    UPDATE comandos_adms
-                    SET estado = 'ENVIADO',
-                        enviado_en = NOW()
-                    WHERE id = ANY(%s);
-                """, (ids_enviados,))
+                    SELECT id, comando
+                    FROM comandos_adms
+                    WHERE sn = %s AND estado = 'PENDIENTE'
+                    ORDER BY id ASC
+                    LIMIT 20;
+                """, (sn_clean,))
+                filas = cur.fetchall()
 
-                respuesta = "\n".join(lineas_cmd)
-                print(f"[ADMS CMD OUT] SN={sn_clean} -> {len(filas)} comando(s) enviados")
-
-        conn.commit()
+                if filas:
+                    lineas_cmd = [f"C:{cmd_id}:{cmd_txt}" for cmd_id, cmd_txt in filas]
+                    ids_enviados = [cmd_id for cmd_id, _ in filas]
+                    cur.execute("""
+                        UPDATE comandos_adms
+                        SET estado = 'ENVIADO',
+                            enviado_en = NOW()
+                        WHERE id = ANY(%s);
+                    """, (ids_enviados,))
+                    respuesta = "\n".join(lineas_cmd)
+                    print(f"[ADMS CMD OUT] SN={sn_clean} -> {len(filas)} comando(s) enviados")
     except Exception as e:
-        conn.rollback()
         print(f"[ADMS GETREQUEST ERROR] SN={sn_clean}: {e}")
         respuesta = "OK"
-    finally:
-        cur.close()
-        conn.close()
 
     return respuesta
 
 
 @app.post("/iclock/devicecmd", response_class=PlainTextResponse)
 async def adms_device_cmd(request: Request, SN: str = Query(None)):
-    body_bytes = await request.body()
-    body_text = body_bytes.decode("utf-8", errors="ignore")
+    body_text = (await request.body()).decode("utf-8", errors="ignore")
     query_str = str(request.query_params)
-    sn_clean = SN.strip() if SN and SN.strip() else None
+    sn_clean = _limpiar_sn(SN)
 
-    conn = get_conn()
-    cur = conn.cursor()
     try:
-        _asegurar_tabla_comandos(cur)
-        _actualizar_ultima_conexion(cur, sn_clean)
-        _confirmar_comandos_desde_texto(cur, sn_clean, f"{query_str} {body_text}")
-        conn.commit()
+        with db_cursor(autocommit=True) as cur:
+            _preparar_entorno_adms(cur, sn_clean)
+            _confirmar_comandos_desde_texto(cur, sn_clean, f"{query_str} {body_text}")
     except Exception as e:
-        conn.rollback()
         print(f"[ADMS DEVICECMD ERROR] {e}")
-    finally:
-        cur.close()
-        conn.close()
 
     return "OK"
 
@@ -629,25 +586,25 @@ class MarcacionBridge(BaseModel):
     sn: str
 
 
+def _validar_bridge_key(request: Request, exigir_si_falta: bool = True) -> None:
+    api_key = request.headers.get("X-Bridge-Key")
+    if exigir_si_falta or api_key:
+        if api_key != settings.BRIDGE_SECRET_KEY:
+            raise HTTPException(status_code=401, detail="No autorizado")
+
+
 @app.post("/api/bridge/marcaciones")
 def recibir_bridge(items: List[MarcacionBridge], request: Request):
-    api_key = request.headers.get("X-Bridge-Key")
-    if api_key != settings.BRIDGE_SECRET_KEY:
-        raise HTTPException(status_code=401, detail="No autorizado")
-
-    conn = get_conn()
-    cur = conn.cursor()
-    nuevos = 0
-    for item in items:
-        cur.execute("""
-            INSERT INTO marcaciones (pin_empleado, fecha_hora, sn_dispositivo)
-            VALUES (%s, %s, %s)
-            ON CONFLICT ON CONSTRAINT uq_marcacion_unica DO NOTHING
-        """, (item.pin, item.fecha_hora, item.sn))
-        nuevos += cur.rowcount
-    conn.commit()
-    cur.close()
-    conn.close()
+    _validar_bridge_key(request, exigir_si_falta=True)
+    with db_cursor(autocommit=True) as cur:
+        nuevos = 0
+        for item in items:
+            cur.execute("""
+                INSERT INTO marcaciones (pin_empleado, fecha_hora, sn_dispositivo)
+                VALUES (%s, %s, %s)
+                ON CONFLICT ON CONSTRAINT uq_marcacion_unica DO NOTHING
+            """, (item.pin, item.fecha_hora, item.sn))
+            nuevos += cur.rowcount
     return {"status": "ok", "insertados": nuevos}
 
 
@@ -686,56 +643,41 @@ class RestaurarRespaldoReq(BaseModel):
 
 @app.get("/api/dispositivos")
 def listar_dispositivos(request: Request):
-    api_key = request.headers.get("X-Bridge-Key")
-    if api_key and api_key != settings.BRIDGE_SECRET_KEY:
-        raise HTTPException(status_code=401, detail="No autorizado")
-
-    conn = get_conn()
-    cur = conn.cursor()
-    cur.execute("""
-        SELECT d.sn, d.nombre, d.rol, d.tipo_conexion, d.ip_address, d.port,
-               TO_CHAR(d.ultima_conexion, 'YYYY-MM-DD HH24:MI:SS') AS ultima_conexion,
-               e.id AS empacadora_id, e.codigo AS empacadora_codigo, e.nombre AS empacadora_nombre
-        FROM dispositivos d
-        JOIN empacadoras e ON d.empacadora_id = e.id
-        ORDER BY e.id, d.nombre;
-    """)
-    data = _rows_to_dicts(cur, cur.fetchall())
-    cur.close()
-    conn.close()
-    return data
+    _validar_bridge_key(request, exigir_si_falta=False)
+    with db_cursor() as cur:
+        cur.execute("""
+            SELECT d.sn, d.nombre, d.rol, d.tipo_conexion, d.ip_address, d.port,
+                   TO_CHAR(d.ultima_conexion, 'YYYY-MM-DD HH24:MI:SS') AS ultima_conexion,
+                   e.id AS empacadora_id, e.codigo AS empacadora_codigo, e.nombre AS empacadora_nombre
+            FROM dispositivos d
+            JOIN empacadoras e ON d.empacadora_id = e.id
+            ORDER BY e.id, d.nombre;
+        """)
+        return _rows_to_dicts(cur, cur.fetchall())
 
 
 @app.post("/api/dispositivos")
 def guardar_dispositivo(item: DispositivoUpdate):
-    conn = get_conn()
-    cur = conn.cursor()
-    cur.execute("""
-        INSERT INTO dispositivos (sn, empacadora_id, nombre, rol, tipo_conexion, ip_address, port)
-        VALUES (%s, %s, %s, %s, %s, %s, %s)
-        ON CONFLICT (sn) DO UPDATE SET
-            empacadora_id = EXCLUDED.empacadora_id,
-            nombre = EXCLUDED.nombre,
-            rol = EXCLUDED.rol,
-            tipo_conexion = EXCLUDED.tipo_conexion,
-            ip_address = EXCLUDED.ip_address,
-            port = EXCLUDED.port;
-    """, (item.sn, item.empacadora_id, item.nombre, item.rol, item.tipo_conexion, item.ip_address, item.port))
-    conn.commit()
-    cur.close()
-    conn.close()
+    with db_cursor(autocommit=True) as cur:
+        cur.execute("""
+            INSERT INTO dispositivos (sn, empacadora_id, nombre, rol, tipo_conexion, ip_address, port)
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
+            ON CONFLICT (sn) DO UPDATE SET
+                empacadora_id = EXCLUDED.empacadora_id,
+                nombre = EXCLUDED.nombre,
+                rol = EXCLUDED.rol,
+                tipo_conexion = EXCLUDED.tipo_conexion,
+                ip_address = EXCLUDED.ip_address,
+                port = EXCLUDED.port;
+        """, (item.sn, item.empacadora_id, item.nombre, item.rol, item.tipo_conexion, item.ip_address, item.port))
     return {"status": "success", "mensaje": "Dispositivo configurado correctamente"}
 
 
 @app.delete("/api/dispositivos/{sn}")
 def eliminar_dispositivo(sn: str):
-    conn = get_conn()
-    cur = conn.cursor()
-    cur.execute("DELETE FROM dispositivos WHERE sn = %s", (sn,))
-    eliminados = cur.rowcount
-    conn.commit()
-    cur.close()
-    conn.close()
+    with db_cursor(autocommit=True) as cur:
+        cur.execute("DELETE FROM dispositivos WHERE sn = %s", (sn,))
+        eliminados = cur.rowcount
     if eliminados == 0:
         raise HTTPException(status_code=404, detail="Dispositivo no encontrado")
     return {"status": "success", "mensaje": "Dispositivo eliminado correctamente"}
@@ -743,44 +685,36 @@ def eliminar_dispositivo(sn: str):
 
 @app.get("/api/empleados")
 def listar_empleados_sync():
-    conn = get_conn()
-    cur = conn.cursor()
-    cur.execute("""
-        SELECT em.pin, em.nombres, em.empacadora_id, em.area,
-               e.codigo AS empacadora_codigo, e.nombre AS empacadora_nombre
-        FROM empleados em
-        LEFT JOIN empacadoras e ON em.empacadora_id = e.id
-        WHERE COALESCE(em.activo, TRUE) = TRUE
-        ORDER BY em.nombres ASC;
-    """)
-    data = _rows_to_dicts(cur, cur.fetchall())
-    cur.close()
-    conn.close()
-    return data
+    with db_cursor() as cur:
+        cur.execute("""
+            SELECT em.pin, em.nombres, em.empacadora_id, em.area,
+                   e.codigo AS empacadora_codigo, e.nombre AS empacadora_nombre
+            FROM empleados em
+            LEFT JOIN empacadoras e ON em.empacadora_id = e.id
+            WHERE COALESCE(em.activo, TRUE) = TRUE
+            ORDER BY em.nombres ASC;
+        """)
+        return _rows_to_dicts(cur, cur.fetchall())
 
 
 @app.get("/api/marcaciones/recientes")
 def marcaciones_recientes(limite: int = 20):
-    conn = get_conn()
-    cur = conn.cursor()
-    cur.execute("""
-        SELECT m.pin_empleado,
-               COALESCE(em.nombres, 'Desconocido / Sin Registro') AS colaborador,
-               TO_CHAR(m.fecha_hora, 'YYYY-MM-DD HH24:MI:SS') AS fecha_hora,
-               COALESCE(d.nombre, m.sn_dispositivo) AS dispositivo_origen,
-               m.sn_dispositivo,
-               COALESCE(e.nombre, '') AS hacienda_nombre
-        FROM marcaciones m
-        LEFT JOIN empleados em ON em.pin = m.pin_empleado
-        LEFT JOIN dispositivos d ON d.sn = m.sn_dispositivo
-        LEFT JOIN empacadoras e ON e.id = d.empacadora_id
-        ORDER BY m.fecha_hora DESC
-        LIMIT %s;
-    """, (limite,))
-    data = _rows_to_dicts(cur, cur.fetchall())
-    cur.close()
-    conn.close()
-    return data
+    with db_cursor() as cur:
+        cur.execute("""
+            SELECT m.pin_empleado,
+                   COALESCE(em.nombres, 'Desconocido / Sin Registro') AS colaborador,
+                   TO_CHAR(m.fecha_hora, 'YYYY-MM-DD HH24:MI:SS') AS fecha_hora,
+                   COALESCE(d.nombre, m.sn_dispositivo) AS dispositivo_origen,
+                   m.sn_dispositivo,
+                   COALESCE(e.nombre, '') AS hacienda_nombre
+            FROM marcaciones m
+            LEFT JOIN empleados em ON em.pin = m.pin_empleado
+            LEFT JOIN dispositivos d ON d.sn = m.sn_dispositivo
+            LEFT JOIN empacadoras e ON e.id = d.empacadora_id
+            ORDER BY m.fecha_hora DESC
+            LIMIT %s;
+        """, (limite,))
+        return _rows_to_dicts(cur, cur.fetchall())
 
 
 @app.get("/api/red/probar-tcp")
@@ -820,14 +754,14 @@ def pull_actualizar_usuario(sn: str, item: UsuarioRelojUpdate):
 @app.get("/api/respaldos/estado")
 def obtener_estado_respaldos():
     carpeta = _carpeta_respaldos()
-    archivos = []
-    for f in sorted(carpeta.glob("*.dump"), key=lambda p: p.stat().st_mtime, reverse=True):
-        stat = f.stat()
-        archivos.append({
+    archivos = [
+        {
             "archivo": f.name,
-            "tamano_kb": round(stat.st_size / 1024, 2),
-            "modificado_en": datetime.fromtimestamp(stat.st_mtime).strftime("%Y-%m-%d %H:%M:%S"),
-        })
+            "tamano_kb": round(f.stat().st_size / 1024, 2),
+            "modificado_en": datetime.fromtimestamp(f.stat().st_mtime).strftime("%Y-%m-%d %H:%M:%S"),
+        }
+        for f in sorted(carpeta.glob("*.dump"), key=lambda p: p.stat().st_mtime, reverse=True)
+    ]
     return {
         "base_datos": settings.DB_NAME,
         "carpeta": str(carpeta),
@@ -877,27 +811,23 @@ def restaurar_respaldo(req: RestaurarRespaldoReq):
 @app.get("/api/empacadoras")
 def listar_empacadoras(fecha: Optional[str] = None):
     fecha_consulta = fecha or date.today().isoformat()
-    conn = get_conn()
-    cur = conn.cursor()
-    cur.execute("""
-        SELECT 
-            e.id, e.codigo, e.nombre,
-            COUNT(DISTINCT CASE WHEN d.rol = 'COMEDOR' AND m.fecha_hora::date = %s 
-                  AND m.fecha_hora::time BETWEEN %s AND %s 
-                  THEN m.pin_empleado END) AS total_almuerzos,
-            COUNT(DISTINCT CASE WHEN d.rol IN ('EMPAQUE', 'OFICINA') AND m.fecha_hora::date = %s 
-                  THEN m.pin_empleado END) AS total_asistencia
-        FROM empacadoras e
-        LEFT JOIN dispositivos d ON d.empacadora_id = e.id
-        LEFT JOIN marcaciones m ON m.sn_dispositivo = d.sn
-        WHERE e.activa = TRUE
-        GROUP BY e.id, e.codigo, e.nombre
-        ORDER BY e.id ASC;
-    """, (fecha_consulta, settings.COMEDOR_INICIO, settings.COMEDOR_FIN, fecha_consulta))
-    data = _rows_to_dicts(cur, cur.fetchall())
-    cur.close()
-    conn.close()
-    return data
+    with db_cursor() as cur:
+        cur.execute("""
+            SELECT
+                e.id, e.codigo, e.nombre,
+                COUNT(DISTINCT CASE WHEN d.rol = 'COMEDOR' AND m.fecha_hora::date = %s
+                      AND m.fecha_hora::time BETWEEN %s AND %s
+                      THEN m.pin_empleado END) AS total_almuerzos,
+                COUNT(DISTINCT CASE WHEN d.rol IN ('EMPAQUE', 'OFICINA') AND m.fecha_hora::date = %s
+                      THEN m.pin_empleado END) AS total_asistencia
+            FROM empacadoras e
+            LEFT JOIN dispositivos d ON d.empacadora_id = e.id
+            LEFT JOIN marcaciones m ON m.sn_dispositivo = d.sn
+            WHERE e.activa = TRUE
+            GROUP BY e.id, e.codigo, e.nombre
+            ORDER BY e.id ASC;
+        """, (fecha_consulta, settings.COMEDOR_INICIO, settings.COMEDOR_FIN, fecha_consulta))
+        return _rows_to_dicts(cur, cur.fetchall())
 
 
 @app.get("/api/reportes/comedor/{empacadora_id}")
@@ -908,7 +838,7 @@ def descargar_excel_comedor(empacadora_id: int, fecha: Optional[str] = None):
         return StreamingResponse(
             buffer,
             media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            headers={"Content-Disposition": f"attachment; filename={filename}"}
+            headers={"Content-Disposition": f"attachment; filename={filename}"},
         )
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
@@ -927,12 +857,9 @@ def ejecutar_consulta_sql_segura(query: str):
         return {"error": "Consulta bloqueada por políticas de seguridad de solo lectura."}
 
     try:
-        conn = get_conn()
-        cur = conn.cursor()
-        cur.execute(query)
-        resultados = _rows_to_dicts(cur, cur.fetchall())
-        cur.close()
-        conn.close()
+        with db_cursor() as cur:
+            cur.execute(query)
+            resultados = _rows_to_dicts(cur, cur.fetchall())
         return {"resultados": json.loads(json.dumps(resultados, default=str))}
     except Exception as e:
         return {"error": f"Error ejecutando SQL: {str(e)}"}
@@ -947,11 +874,11 @@ tools_definition = [
             "properties": {
                 "query": {
                     "type": "string",
-                    "description": "Consulta SQL SELECT válida para PostgreSQL."
+                    "description": "Consulta SQL SELECT válida para PostgreSQL.",
                 }
             },
-            "required": ["query"]
-        }
+            "required": ["query"],
+        },
     }
 ]
 
@@ -988,48 +915,44 @@ def chat_rrhh(req: ChatRequest):
         "genera la consulta SQL SELECT adecuada, ejecútala con la herramienta, analiza los datos reales y entrega una respuesta clara, directa y estructurada."
     )
 
-    messages = [{"role": "user", "content": req.mensaje}]
-
+    messages: list[dict[str, Any]] = [{"role": "user", "content": req.mensaje}]
     response = client.messages.create(
         model="claude-sonnet-4-20250514",
         max_tokens=1024,
         system=system_prompt,
         tools=tools_definition,
-        messages=messages
+        messages=messages,
     )
 
     while response.stop_reason == "tool_use":
         messages.append({"role": "assistant", "content": response.content})
         tool_results_content = []
-
         for block in response.content:
             if block.type == "tool_use":
-                if block.name == "ejecutar_consulta_sql_segura":
-                    resultado_sql = ejecutar_consulta_sql_segura(block.input["query"])
-                else:
-                    resultado_sql = {"error": "Herramienta no reconocida"}
-
+                resultado_sql = (
+                    ejecutar_consulta_sql_segura(block.input["query"])
+                    if block.name == "ejecutar_consulta_sql_segura"
+                    else {"error": "Herramienta no reconocida"}
+                )
                 tool_results_content.append({
                     "type": "tool_result",
                     "tool_use_id": block.id,
-                    "content": json.dumps(resultado_sql)
+                    "content": json.dumps(resultado_sql),
                 })
 
         messages.append({"role": "user", "content": tool_results_content})
-
         response = client.messages.create(
             model="claude-sonnet-4-20250514",
             max_tokens=1024,
             system=system_prompt,
             tools=tools_definition,
-            messages=messages
+            messages=messages,
         )
 
     texto_final = next((b.text for b in response.content if hasattr(b, "text")), "Sin respuesta generada.")
     return {"respuesta": texto_final}
 
 
-# Servir Frontend (compatible con desarrollo y compilado con PyInstaller)
 def _resolver_static_dir() -> str:
     if getattr(sys, "frozen", False) and hasattr(sys, "_MEIPASS"):
         bundle_static = os.path.join(sys._MEIPASS, "static")

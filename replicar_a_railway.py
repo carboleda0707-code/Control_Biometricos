@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 import os
 import ssl
+import time
 from pathlib import Path
 from dotenv import load_dotenv
 import pg8000.dbapi
@@ -13,6 +14,8 @@ from db import get_conn as get_local_conn  # noqa: E402
 
 
 def _get_railway_conn():
+    load_dotenv(BASE_DIR / ".env", override=False)
+
     host = os.getenv("RAILWAY_DB_HOST", "").strip()
     port_raw = os.getenv("RAILWAY_DB_PORT", "").strip()
     database = os.getenv("RAILWAY_DB_NAME", "").strip()
@@ -123,7 +126,10 @@ def _asegurar_tablas_destino(dst_cur) -> None:
     """)
 
 
-def replicar_todo_a_railway(limite_marcaciones: int = 5000) -> dict:
+def replicar_todo_a_railway(limite_marcaciones: int | None = None) -> dict:
+    raw_lim = os.getenv("RAILWAY_REPLICA_LIMIT_MARCACIONES", "").strip()
+    limite = limite_marcaciones if limite_marcaciones is not None else (int(raw_lim) if raw_lim.isdigit() else 5000)
+
     src_conn = get_local_conn()
     dst_conn = _get_railway_conn()
     src_cur = src_conn.cursor()
@@ -276,7 +282,7 @@ def replicar_todo_a_railway(limite_marcaciones: int = 5000) -> dict:
             ORDER BY fecha_hora DESC
             LIMIT %s;
             """,
-            (int(limite_marcaciones),),
+            (int(limite),),
         )
         for row in src_cur.fetchall():
             dst_cur.execute(
@@ -299,6 +305,22 @@ def replicar_todo_a_railway(limite_marcaciones: int = 5000) -> dict:
         dst_cur.close()
         src_conn.close()
         dst_conn.close()
+
+
+def ejecutar_replica_automatica_loop(intervalo_seg: int | None = None) -> None:
+    """Ejecuta una réplica inmediata al iniciar y repite periódicamente en segundo plano."""
+    load_dotenv(BASE_DIR / ".env", override=False)
+    raw_int = os.getenv("RAILWAY_REPLICA_INTERVAL_SEC", "").strip()
+    intervalo = intervalo_seg if intervalo_seg is not None else (int(raw_int) if raw_int.isdigit() else 30)
+    intervalo = max(10, intervalo)
+
+    while True:
+        try:
+            resumen = replicar_todo_a_railway()
+            print(f"[RAILWAY AUTO-REPLICA] OK -> {resumen}")
+        except Exception as e:
+            print(f"[RAILWAY AUTO-REPLICA WARN] {e}")
+        time.sleep(intervalo)
 
 
 if __name__ == "__main__":
