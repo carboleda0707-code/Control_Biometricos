@@ -14,9 +14,56 @@ from db import get_conn, init_db
 from views import areas, companias, dispositivos, empleados, haciendas, reportes
 
 st.set_page_config(
-    page_title="Control Biométrico Bananeras - Panel Admin",
+    page_title="Control Biométrico Bananeras",
     page_icon="🍌",
     layout="wide",
+    initial_sidebar_state="expanded",
+)
+
+# Estilos minimalistas, bajando el contenido aprox. 1 línea y manteniendo letra normal/compacta
+st.markdown(
+    """
+    <style>
+        .block-container {
+            padding-top: 1.15rem !important;
+            padding-bottom: 1rem !important;
+        }
+        div[data-testid="stVerticalBlock"] > div {
+            gap: 0.45rem;
+        }
+        hr {
+            margin-top: 0.35rem !important;
+            margin-bottom: 0.45rem !important;
+        }
+        h1 {
+            font-size: 1.4rem !important;
+            font-weight: 600 !important;
+            margin-top: 0 !important;
+            margin-bottom: 0.15rem !important;
+            line-height: 1.2 !important;
+        }
+        h2, .stSubheader {
+            font-size: 1.05rem !important;
+            font-weight: 600 !important;
+            margin-top: 0.25rem !important;
+            margin-bottom: 0.25rem !important;
+        }
+        h3 {
+            font-size: 0.95rem !important;
+            font-weight: 600 !important;
+        }
+        p, label, .stMarkdown, .stCaption, div[data-testid="stText"] {
+            font-size: 0.85rem !important;
+        }
+        div[data-testid="stSidebar"] .block-container {
+            padding-top: 0.95rem !important;
+        }
+        div[data-testid="stSidebar"] h1 {
+            font-size: 1.15rem !important;
+        }
+    </style>
+    """,
+    unsafe_allow_html=True,
 )
 
 
@@ -68,7 +115,28 @@ def _binario_pg(nombre_binario: str) -> str:
         for candidato in (Path(pg_bin) / f"{nombre_binario}.exe", Path(pg_bin) / nombre_binario):
             if candidato.exists():
                 return str(candidato)
+
+    # Prioriza instalaciones recientes de PostgreSQL en Windows (18, 17, 16...) frente a versiones antiguas en PATH
+    for ver in ("18", "17", "16", "15", "14"):
+        for base_dir in (Path(r"C:\Program Files\PostgreSQL"), Path(r"C:\Program Files (x86)\PostgreSQL")):
+            candidato_win = base_dir / ver / "bin" / f"{nombre_binario}.exe"
+            if candidato_win.exists():
+                return str(candidato_win)
+
     return nombre_binario
+
+
+def _limpiar_dumps_vacios() -> int:
+    """Elimina archivos .dump corruptos o de 0 bytes en la carpeta de respaldos."""
+    eliminados = 0
+    for f in _carpeta_respaldos().glob("*.dump"):
+        try:
+            if f.is_file() and f.stat().st_size == 0:
+                f.unlink()
+                eliminados += 1
+        except Exception:
+            pass
+    return eliminados
 
 
 def ejecutar_pg_dump() -> dict:
@@ -91,16 +159,28 @@ def ejecutar_pg_dump() -> dict:
         str(settings.DB_NAME),
     ]
 
-    proc = subprocess.run(cmd, env=env, capture_output=True, text=True, timeout=300)
-    if proc.returncode != 0:
-        raise RuntimeError(proc.stderr.strip() or "Error ejecutando pg_dump")
+    try:
+        proc = subprocess.run(cmd, env=env, capture_output=True, text=True, timeout=300)
+        if proc.returncode != 0:
+            raise RuntimeError(proc.stderr.strip() or "Error ejecutando pg_dump")
 
-    size_kb = round(destino.stat().st_size / 1024, 2) if destino.exists() else 0.0
-    return {
-        "archivo": nombre_archivo,
-        "tamano_kb": size_kb,
-        "creado_en": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-    }
+        if not destino.exists() or destino.stat().st_size == 0:
+            raise RuntimeError("pg_dump finalizó sin escribir datos (archivo de 0 bytes).")
+
+        size_kb = round(destino.stat().st_size / 1024, 2)
+        return {
+            "archivo": nombre_archivo,
+            "tamano_kb": size_kb,
+            "creado_en": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        }
+    except Exception:
+        # Si falló o quedó en 0 bytes, borrar el archivo incompleto
+        try:
+            if destino.exists() and destino.stat().st_size == 0:
+                destino.unlink()
+        except Exception:
+            pass
+        raise
 
 
 def ejecutar_pg_restore(nombre_archivo: str) -> dict:
@@ -109,6 +189,9 @@ def ejecutar_pg_restore(nombre_archivo: str) -> dict:
 
     if not archivo_resuelto.exists() or archivo_resuelto.parent != base:
         raise FileNotFoundError("El archivo de respaldo seleccionado no existe.")
+
+    if archivo_resuelto.stat().st_size == 0:
+        raise ValueError("El archivo de respaldo seleccionado está vacío (0 KB) y no puede restaurarse.")
 
     env = os.environ.copy()
     if settings.DB_PASSWORD:
@@ -146,7 +229,7 @@ def _paso_worker_respaldo() -> None:
     if ahora >= objetivo and (prog.get("ultima_ejecucion") or "") != clave_ejecucion:
         info = ejecutar_pg_dump()
         prog["ultima_ejecucion"] = clave_ejecucion
-        prog["ultimo_estado"] = f"OK ({info['archivo']})"
+        prog["ultimo_estado"] = f"OK ({info['archivo']} - {info['tamano_kb']} KB)"
         if prog.get("repetir_semanal"):
             siguiente = objetivo + timedelta(days=7)
             prog["fecha_hora"] = siguiente.strftime("%Y-%m-%dT%H:%M")
@@ -161,7 +244,9 @@ async def worker_respaldo_programado() -> None:
             _paso_worker_respaldo()
         except Exception as e:
             prog = _cargar_programacion()
-            prog["ultimo_estado"] = f"Error: {e}"
+            # Desactiva la ejecución automática ante error para evitar reintentos infinitos cada 20s
+            prog["habilitado"] = False
+            prog["ultimo_estado"] = f"Error (auto-pausado): {e}"
             _guardar_programacion(prog)
         await asyncio.sleep(20)
 
@@ -240,8 +325,8 @@ def _obtener_resumen_dashboard() -> dict:
 
 
 def _render_respaldos_y_restauracion() -> None:
-    st.title("Copia de Seguridad y Restauración de Base de Datos")
-    st.caption(f"Base de datos: {settings.DB_NAME} | Carpeta: {_carpeta_respaldos()}")
+    st.title("Copia de Seguridad y Restauración")
+    st.caption(f"Base de datos: {settings.DB_NAME} | Binario: {_binario_pg('pg_dump')} | Carpeta: {_carpeta_respaldos()}")
 
     prog = _cargar_programacion()
     col_izq, col_der = st.columns(2)
@@ -286,7 +371,7 @@ def _render_respaldos_y_restauracion() -> None:
             try:
                 info = ejecutar_pg_dump()
                 prog["ultima_ejecucion"] = datetime.now().strftime("%Y-%m-%d %H:%M")
-                prog["ultimo_estado"] = f"OK ({info['archivo']})"
+                prog["ultimo_estado"] = f"OK ({info['archivo']} - {info['tamano_kb']} KB)"
                 _guardar_programacion(prog)
                 st.success(f"Respaldo generado: {info['archivo']} ({info['tamano_kb']} KB)")
             except Exception as exc:
@@ -303,9 +388,12 @@ def _render_respaldos_y_restauracion() -> None:
         st.info(f"Programación: {prog_txt}")
 
         carpeta = _carpeta_respaldos()
-        archivos = sorted(carpeta.glob("*.dump"), key=lambda p: p.stat().st_mtime, reverse=True)
-        if archivos:
-            opciones = [a.name for a in archivos]
+        archivos_todos = sorted(carpeta.glob("*.dump"), key=lambda p: p.stat().st_mtime, reverse=True)
+        archivos_validos = [a for a in archivos_todos if a.stat().st_size > 0]
+        archivos_vacios = [a for a in archivos_todos if a.stat().st_size == 0]
+
+        if archivos_validos:
+            opciones = [a.name for a in archivos_validos]
             archivo_sel = st.selectbox("Seleccione el respaldo (.dump)", opciones, key="respaldo_archivo_sel")
             if st.button("Restaurar base seleccionada", type="primary", use_container_width=True):
                 try:
@@ -314,12 +402,18 @@ def _render_respaldos_y_restauracion() -> None:
                 except Exception as exc:
                     st.error(f"Error al restaurar base de datos: {exc}")
         else:
-            st.warning("Aún no existen archivos .dump en la carpeta de respaldos.")
+            st.warning("Aún no existen respaldos válidos (> 0 KB) en la carpeta de respaldos.")
+
+        if archivos_vacios:
+            if st.button(f"Limpiar {len(archivos_vacios)} archivo(s) vacíos (0 KB)", use_container_width=True):
+                borrados = _limpiar_dumps_vacios()
+                st.success(f"Se eliminaron {borrados} archivo(s) vacíos.")
+                st.rerun()
 
     st.divider()
     st.subheader("Historial de Copias de Seguridad")
     carpeta = _carpeta_respaldos()
-    archivos = sorted(carpeta.glob("*.dump"), key=lambda p: p.stat().st_mtime, reverse=True)
+    archivos = [f for f in sorted(carpeta.glob("*.dump"), key=lambda p: p.stat().st_mtime, reverse=True) if f.stat().st_size > 0]
     if archivos:
         filas = [
             {
@@ -331,7 +425,7 @@ def _render_respaldos_y_restauracion() -> None:
         ]
         st.dataframe(filas, use_container_width=True, hide_index=True)
     else:
-        st.caption("Sin respaldos generados todavía.")
+        st.caption("Sin respaldos válidos generados todavía.")
 
 
 bootstrap_db()
@@ -340,41 +434,40 @@ iniciar_worker_respaldo()
 modo_hibrido = bool(getattr(settings, "RAILWAY_ENABLED", False))
 heartbeat_seg = int(getattr(settings, "PUSH_HEARTBEAT_SEGUNDOS", 300))
 
-# Menú lateral estructurado
-st.sidebar.title("🍌 BioControl Bananeras")
+# Menú lateral estructurado (contraíble y expandible desde el control nativo de Streamlit)
+st.sidebar.title("BioControl Bananeras")
 st.sidebar.caption("Modo Híbrido (Local + Nube)" if modo_hibrido else "Sistema Autónomo Local (LAN/VLAN)")
 st.sidebar.divider()
 
 menu = st.sidebar.radio(
     "Navegación Principal:",
     [
-        "📊 Dashboard General",
-        "🏛️ Mantenimiento de Compañías",
-        "🌴 Haciendas Empacadoras",
-        "📂 Áreas y Departamentos",
-        "👥 Gestión de Empleados",
-        "🖨️ Dispositivos Biométricos",
-        "📊 Reportes y Auditoría",
-        "💾 Copia de Seguridad / Restaurar",
+        "Dashboard General",
+        "Mantenimiento de Compañías",
+        "Haciendas Empacadoras",
+        "Áreas y Departamentos",
+        "Gestión de Empleados",
+        "Dispositivos Biométricos",
+        "Reportes y Auditoría",
+        "Copia de Seguridad / Restaurar",
     ],
 )
 
-# Estado de Base de Datos y Servicio en el menú lateral (sin contraseña)
 st.sidebar.divider()
 st.sidebar.caption("Estado de Conexión")
 
 if "db_status" not in st.session_state:
     st.session_state.db_status = verificar_conexion_db()
 
-if st.sidebar.button("🔄 Reprobar conexión", use_container_width=True):
+if st.sidebar.button("Reprobar conexión", use_container_width=True):
     st.session_state.db_status = verificar_conexion_db()
 
 db_ok, db_detalle = st.session_state.db_status
 
 if db_ok:
-    st.sidebar.success(f"🟢 BD Conectada ({settings.DB_NAME})")
+    st.sidebar.success(f"BD Conectada ({settings.DB_NAME})")
 else:
-    st.sidebar.error("🔴 BD Sin conexión")
+    st.sidebar.error("BD Sin conexión")
     st.sidebar.caption(f"Detalle: {db_detalle}")
 
 st.sidebar.markdown(
@@ -388,8 +481,8 @@ st.sidebar.markdown(
     """
 )
 
-if menu == "📊 Dashboard General":
-    st.title("Panel de Control - Biométricos Bananeras")
+if menu == "Dashboard General":
+    st.title("Panel de Control")
     st.caption("Resumen operativo de compañías, haciendas, personal, dispositivos ZKTeco y marcaciones del día.")
 
     if db_ok:
@@ -401,27 +494,27 @@ if menu == "📊 Dashboard General":
         k4.metric("Biométricos", datos_dash["dispositivos"])
         k5.metric("Marcaciones Hoy", datos_dash["marcaciones_hoy"])
         st.divider()
-        st.info("Seleccione una opción del menú lateral para gestionar catálogos, sincronizar relojes o auditar reportes.")
+        st.caption("Seleccione una opción del menú lateral para gestionar catálogos, sincronizar relojes o auditar reportes.")
     else:
         st.warning("La base de datos no está conectada en este momento. Revise el estado en la barra lateral.")
 
-elif menu == "🏛️ Mantenimiento de Compañías":
+elif menu == "Mantenimiento de Compañías":
     companias.render()
 
-elif menu == "🌴 Haciendas Empacadoras":
+elif menu == "Haciendas Empacadoras":
     haciendas.render()
 
-elif menu == "📂 Áreas y Departamentos":
+elif menu == "Áreas y Departamentos":
     areas.render()
 
-elif menu == "👥 Gestión de Empleados":
+elif menu == "Gestión de Empleados":
     empleados.render()
 
-elif menu == "🖨️ Dispositivos Biométricos":
+elif menu == "Dispositivos Biométricos":
     dispositivos.render()
 
-elif menu == "📊 Reportes y Auditoría":
+elif menu == "Reportes y Auditoría":
     reportes.render()
 
-elif menu == "💾 Copia de Seguridad / Restaurar":
+elif menu == "Copia de Seguridad / Restaurar":
     _render_respaldos_y_restauracion()

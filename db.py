@@ -79,7 +79,7 @@ def init_db():
     # 1. Asegurar que la base de datos exista
     crear_base_datos_si_no_existe()
 
-    # 2. Conectar y crear/migrar tablas e índices usando pg8000
+    # 2. Conectar y crear/migrar tablas, índices y vistas usando pg8000
     conn = get_conn()
     conn.autocommit = False
     cur = conn.cursor()
@@ -197,6 +197,7 @@ def init_db():
             );
         """)
 
+        # Índices para acelerar búsquedas por fecha, empleado, biométrico, rol y hacienda
         cur.execute("""
             CREATE INDEX IF NOT EXISTS idx_marcaciones_fecha ON marcaciones (fecha_hora);
         """)
@@ -205,8 +206,129 @@ def init_db():
             CREATE INDEX IF NOT EXISTS idx_marcaciones_pin_fecha ON marcaciones (pin_empleado, fecha_hora);
         """)
 
+        cur.execute("""
+            CREATE INDEX IF NOT EXISTS idx_marcaciones_sn ON marcaciones (sn_dispositivo);
+        """)
+
+        cur.execute("""
+            CREATE INDEX IF NOT EXISTS idx_marcaciones_sn_fecha ON marcaciones (sn_dispositivo, fecha_hora);
+        """)
+
+        cur.execute("""
+            CREATE INDEX IF NOT EXISTS idx_dispositivos_rol ON dispositivos (rol);
+        """)
+
+        cur.execute("""
+            CREATE INDEX IF NOT EXISTS idx_dispositivos_empacadora ON dispositivos (empacadora_id);
+        """)
+
+        cur.execute("""
+            CREATE INDEX IF NOT EXISTS idx_empleados_empacadora ON empleados (empacadora_id);
+        """)
+
+        cur.execute("""
+            CREATE INDEX IF NOT EXISTS idx_empleados_departamento ON empleados (departamento_id);
+        """)
+
+        cur.execute("""
+            CREATE INDEX IF NOT EXISTS idx_empleado_haciendas_empacadora ON empleado_haciendas (empacadora_id);
+        """)
+
+        # Vista de marcaciones enriquecidas (asistencia, comedor, dispositivo, hacienda y compañía)
+        cur.execute("""
+            CREATE OR REPLACE VIEW v_marcaciones_detalle AS
+            SELECT
+                m.id AS marcacion_id,
+                m.fecha_hora,
+                m.fecha_hora::date AS fecha,
+                m.pin_empleado,
+                e.pin AS pin_maestro,
+                e.cedula,
+                COALESCE(e.nombres, 'Desconocido / Sin Registro') AS colaborador,
+                COALESCE(e.activo, FALSE) AS empleado_activo,
+                COALESCE(d.nombre, e.area, 'Sin Área') AS area_operativa,
+                dept.nombre AS departamento,
+                m.sn_dispositivo,
+                COALESCE(d.nombre, m.sn_dispositivo) AS dispositivo_nombre,
+                d.rol AS rol_dispositivo,
+                COALESCE(d.empacadora_id, e.empacadora_id) AS empacadora_id,
+                emp.codigo AS codigo_hacienda,
+                COALESCE(emp.nombre, 'Sin Hacienda') AS hacienda_nombre,
+                comp.nombre AS compania_nombre,
+                m.estado_verificacion,
+                (e.pin IS NULL) AS sin_registro_maestro
+            FROM marcaciones m
+            LEFT JOIN empleados e
+                ON LTRIM(TRIM(m.pin_empleado), '0') = LTRIM(TRIM(e.pin), '0')
+            LEFT JOIN departamentos dept
+                ON e.departamento_id = dept.id
+            LEFT JOIN dispositivos d
+                ON m.sn_dispositivo = d.sn
+            LEFT JOIN empacadoras emp
+                ON COALESCE(d.empacadora_id, e.empacadora_id) = emp.id
+            LEFT JOIN companias comp
+                ON emp.compania_id = comp.id;
+        """)
+
+        # Vista de personal con haciendas y áreas autorizadas
+        cur.execute("""
+            CREATE OR REPLACE VIEW v_empleados_autorizaciones AS
+            SELECT
+                e.pin,
+                e.cedula,
+                e.nombres,
+                COALESCE(e.area, 'Sin área') AS area,
+                dept.nombre AS departamento,
+                e.activo,
+                e.empacadora_id AS empacadora_principal_id,
+                emp_base.codigo AS codigo_hacienda_principal,
+                emp_base.nombre AS hacienda_principal,
+                comp.nombre AS compania_nombre,
+                STRING_AGG(
+                    DISTINCT CONCAT('[', e_hac.codigo, '] ', e_hac.nombre),
+                    ', ' ORDER BY CONCAT('[', e_hac.codigo, '] ', e_hac.nombre)
+                ) AS haciendas_autorizadas,
+                STRING_AGG(
+                    DISTINCT CONCAT(e_hac.codigo, ':', eh.area_autorizada),
+                    ', ' ORDER BY CONCAT(e_hac.codigo, ':', eh.area_autorizada)
+                ) AS areas_autorizadas
+            FROM empleados e
+            LEFT JOIN departamentos dept
+                ON e.departamento_id = dept.id
+            LEFT JOIN empacadoras emp_base
+                ON e.empacadora_id = emp_base.id
+            LEFT JOIN companias comp
+                ON emp_base.compania_id = comp.id
+            LEFT JOIN empleado_haciendas eh
+                ON e.pin = eh.pin_empleado
+            LEFT JOIN empacadoras e_hac
+                ON eh.empacadora_id = e_hac.id
+            GROUP BY
+                e.pin,
+                e.cedula,
+                e.nombres,
+                e.area,
+                dept.nombre,
+                e.activo,
+                e.empacadora_id,
+                emp_base.codigo,
+                emp_base.nombre,
+                comp.nombre;
+        """)
+
+        # Otorgar acceso de lectura a las vistas si el rol rrhhconsulta_ia existe
+        cur.execute("""
+            DO $$
+            BEGIN
+                IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'rrhhconsulta_ia') THEN
+                    GRANT SELECT ON v_marcaciones_detalle, v_empleados_autorizaciones TO rrhhconsulta_ia;
+                END IF;
+            END
+            $$;
+        """)
+
         conn.commit()
-        print("[DB] Estructura inicializada y migrada correctamente (Multihacienda con áreas específicas).")
+        print("[DB] Estructura, índices y vistas inicializados y migrados correctamente (Multihacienda con áreas específicas).")
     except Exception:
         conn.rollback()
         raise
