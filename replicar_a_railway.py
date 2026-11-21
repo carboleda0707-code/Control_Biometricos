@@ -14,16 +14,18 @@ from db import get_conn as get_local_conn  # noqa: E402
 
 def _get_railway_conn():
     host = os.getenv("RAILWAY_DB_HOST", "").strip()
-    port = int(os.getenv("RAILWAY_DB_PORT", "5432"))
+    port_raw = os.getenv("RAILWAY_DB_PORT", "").strip()
     database = os.getenv("RAILWAY_DB_NAME", "").strip()
     user = os.getenv("RAILWAY_DB_USER", "").strip()
     password = os.getenv("RAILWAY_DB_PASSWORD", "").strip()
     ssl_mode = os.getenv("RAILWAY_DB_SSL_MODE", "require").strip().lower()
 
-    if not all([host, database, user]):
+    if not all([host, port_raw, database, user, password]):
         raise RuntimeError(
-            "Faltan variables RAILWAY_DB_HOST, RAILWAY_DB_NAME o RAILWAY_DB_USER en .env."
+            "Faltan variables RAILWAY_DB_HOST, RAILWAY_DB_PORT, RAILWAY_DB_NAME, RAILWAY_DB_USER o RAILWAY_DB_PASSWORD en el entorno / .env."
         )
+
+    port = int(port_raw)
 
     kwargs = {
         "host": host,
@@ -39,6 +41,86 @@ def _get_railway_conn():
         kwargs["ssl_context"] = ctx
 
     return pg8000.dbapi.connect(**kwargs)
+
+
+def _asegurar_tablas_destino(dst_cur) -> None:
+    dst_cur.execute("""
+        CREATE TABLE IF NOT EXISTS companias (
+            id INTEGER PRIMARY KEY,
+            ruc VARCHAR(30),
+            nombre VARCHAR(150),
+            direccion TEXT,
+            telefono VARCHAR(50),
+            correo_principal VARCHAR(150),
+            activa BOOLEAN DEFAULT TRUE
+        );
+    """)
+    dst_cur.execute("""
+        CREATE TABLE IF NOT EXISTS empacadoras (
+            id INTEGER PRIMARY KEY,
+            compania_id INTEGER,
+            codigo VARCHAR(30),
+            nombre VARCHAR(150),
+            ubicacion TEXT,
+            correo VARCHAR(150),
+            encargado VARCHAR(150),
+            activa BOOLEAN DEFAULT TRUE
+        );
+    """)
+    dst_cur.execute("""
+        CREATE TABLE IF NOT EXISTS departamentos (
+            id INTEGER PRIMARY KEY,
+            empacadora_id INTEGER,
+            nombre VARCHAR(150),
+            descripcion TEXT,
+            activo BOOLEAN DEFAULT TRUE
+        );
+    """)
+    dst_cur.execute("""
+        CREATE TABLE IF NOT EXISTS dispositivos (
+            sn VARCHAR(64) PRIMARY KEY,
+            empacadora_id INTEGER,
+            nombre VARCHAR(150),
+            rol VARCHAR(50),
+            tipo_conexion VARCHAR(30),
+            ip_address VARCHAR(64),
+            port INTEGER,
+            ultima_conexion TIMESTAMP
+        );
+    """)
+    dst_cur.execute("""
+        CREATE TABLE IF NOT EXISTS empleados (
+            pin VARCHAR(32) PRIMARY KEY,
+            cedula VARCHAR(32),
+            nombres VARCHAR(150),
+            empacadora_id INTEGER,
+            departamento_id INTEGER,
+            area VARCHAR(50),
+            privilege INTEGER DEFAULT 0,
+            password VARCHAR(64),
+            card_number BIGINT,
+            activo BOOLEAN DEFAULT TRUE
+        );
+    """)
+    dst_cur.execute("""
+        CREATE TABLE IF NOT EXISTS empleado_haciendas (
+            pin_empleado VARCHAR(32) NOT NULL,
+            empacadora_id INTEGER NOT NULL,
+            area_autorizada VARCHAR(50) NOT NULL,
+            CONSTRAINT uq_empleado_haciendas UNIQUE (pin_empleado, empacadora_id, area_autorizada)
+        );
+    """)
+    dst_cur.execute("""
+        CREATE TABLE IF NOT EXISTS marcaciones (
+            id SERIAL PRIMARY KEY,
+            pin_empleado VARCHAR(32) NOT NULL,
+            fecha_hora TIMESTAMP NOT NULL,
+            sn_dispositivo VARCHAR(64),
+            estado_verificacion INTEGER DEFAULT 1,
+            creado_en TIMESTAMP DEFAULT NOW(),
+            CONSTRAINT uq_marcacion_unica UNIQUE (pin_empleado, fecha_hora, sn_dispositivo)
+        );
+    """)
 
 
 def replicar_todo_a_railway(limite_marcaciones: int = 5000) -> dict:
@@ -58,6 +140,8 @@ def replicar_todo_a_railway(limite_marcaciones: int = 5000) -> dict:
     }
 
     try:
+        _asegurar_tablas_destino(dst_cur)
+
         # 1. Compañías
         src_cur.execute(
             "SELECT id, ruc, nombre, direccion, telefono, correo_principal, activa FROM companias;"
