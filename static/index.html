@@ -19,9 +19,13 @@
           <span>Modo: <strong id="texto-modo">-</strong></span>
         </p>
       </div>
-      <div id="badge-modo-sistema" class="status-pill">
-        <span class="status-dot"></span>
-        <span id="texto-estado-pill">Verificando estado...</span>
+      <div class="header-actions">
+        <button type="button" class="btn btn-secondary" id="btn-actualizar-bd">Actualizar BD</button>
+        <span class="replica-status" id="estado-replica-bd"></span>
+        <div id="badge-modo-sistema" class="status-pill">
+          <span class="status-dot"></span>
+          <span id="texto-estado-pill">Verificando estado...</span>
+        </div>
       </div>
     </header>
 
@@ -42,7 +46,7 @@
         ></textarea>
       </div>
 
-      <div class="actions-row" style="margin-bottom: 0;">
+      <div class="actions-row actions-row--flush">
         <button type="button" class="btn btn-primary" id="btn-enviar-claude">Consultar</button>
         <span class="meta-line" id="claude-prompt-estado"></span>
       </div>
@@ -237,7 +241,7 @@
         <button type="button" class="btn btn-secondary" id="btn-refrescar-activos">Actualizar</button>
       </div>
 
-      <div class="field-group" style="max-width: 340px;">
+      <div class="field-group field-group--compact">
         <label for="filtro-hacienda-activos">Hacienda</label>
         <select id="filtro-hacienda-activos">
           <option value="">Todas las haciendas</option>
@@ -306,6 +310,13 @@
         return ((Date.now() - ts) / 1000) <= pushHeartbeatSegundos;
       }
       return Boolean(d.ip_address && String(d.ip_address).trim() !== "");
+    }
+
+    function setEstadoReplica(texto, tipo = "") {
+      const el = document.getElementById("estado-replica-bd");
+      if (!el) return;
+      el.textContent = texto;
+      el.className = "replica-status" + (tipo ? ` is-${tipo}` : "");
     }
 
     async function cargarEstadoYEmpresa() {
@@ -638,6 +649,25 @@
       }
     }
 
+    const btnActualizarBd = document.getElementById("btn-actualizar-bd");
+    btnActualizarBd?.addEventListener("click", async () => {
+      btnActualizarBd.disabled = true;
+      setEstadoReplica("Replicando BD...");
+      try {
+        const res = await fetch("/api/replicar-bd", { method: "POST" });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          throw new Error(data.detail || `Error HTTP ${res.status}`);
+        }
+        setEstadoReplica(data.mensaje || "BD actualizada.", "ok");
+        await cargarDatos();
+      } catch (err) {
+        setEstadoReplica(`Error: ${err.message}`, "error");
+      } finally {
+        btnActualizarBd.disabled = false;
+      }
+    });
+
     document.querySelectorAll(".tab-btn").forEach(btn => {
       btn.addEventListener("click", () => {
         document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active"));
@@ -732,7 +762,7 @@
 
       btnClaude.disabled = true;
       estadoClaude.textContent = "Consultando...";
-      cajaRespuestaClaude.style.display = "none";
+      cajaRespuestaClaude.classList.remove("is-visible");
 
       try {
         const res = await fetch("/api/chat", {
@@ -746,7 +776,7 @@
           return;
         }
         cajaRespuestaClaude.textContent = data.respuesta || "(Sin respuesta)";
-        cajaRespuestaClaude.style.display = "block";
+        cajaRespuestaClaude.classList.add("is-visible");
         estadoClaude.textContent = "Consulta completada.";
       } catch (err) {
         estadoClaude.textContent = "Error de conexión: " + err.message;

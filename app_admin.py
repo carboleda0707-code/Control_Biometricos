@@ -174,7 +174,6 @@ def ejecutar_pg_dump() -> dict:
             "creado_en": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         }
     except Exception:
-        # Si falló o quedó en 0 bytes, borrar el archivo incompleto
         try:
             if destino.exists() and destino.stat().st_size == 0:
                 destino.unlink()
@@ -244,7 +243,6 @@ async def worker_respaldo_programado() -> None:
             _paso_worker_respaldo()
         except Exception as e:
             prog = _cargar_programacion()
-            # Desactiva la ejecución automática ante error para evitar reintentos infinitos cada 20s
             prog["habilitado"] = False
             prog["ultimo_estado"] = f"Error (auto-pausado): {e}"
             _guardar_programacion(prog)
@@ -291,30 +289,34 @@ def _obtener_resumen_dashboard() -> dict:
         "empleados": 0,
         "dispositivos": 0,
         "marcaciones_hoy": 0,
+        "errores": [],
     }
     conn = None
     try:
         conn = get_conn()
         cur = conn.cursor()
 
-        cur.execute("SELECT COUNT(*) FROM companias;")
-        resumen["companias"] = int(cur.fetchone()[0] or 0)
-
-        cur.execute("SELECT COUNT(*) FROM empacadoras WHERE activa = TRUE;")
-        resumen["haciendas"] = int(cur.fetchone()[0] or 0)
-
-        cur.execute("SELECT COUNT(*) FROM empleados WHERE activo = TRUE;")
-        resumen["empleados"] = int(cur.fetchone()[0] or 0)
-
-        cur.execute("SELECT COUNT(*) FROM dispositivos;")
-        resumen["dispositivos"] = int(cur.fetchone()[0] or 0)
-
-        cur.execute("SELECT COUNT(*) FROM marcaciones WHERE fecha_hora::date = CURRENT_DATE;")
-        resumen["marcaciones_hoy"] = int(cur.fetchone()[0] or 0)
+        consultas = [
+            ("companias", "SELECT COUNT(*) FROM companias;"),
+            ("haciendas", "SELECT COUNT(*) FROM empacadoras WHERE activa = TRUE;"),
+            ("empleados", "SELECT COUNT(*) FROM empleados WHERE activo = TRUE;"),
+            ("dispositivos", "SELECT COUNT(*) FROM dispositivos;"),
+            ("marcaciones_hoy", "SELECT COUNT(*) FROM marcaciones WHERE fecha_hora::date = CURRENT_DATE;"),
+        ]
+        for clave, sql in consultas:
+            try:
+                cur.execute(sql)
+                resumen[clave] = int(cur.fetchone()[0] or 0)
+            except Exception as exc_q:
+                try:
+                    conn.rollback()
+                except Exception:
+                    pass
+                resumen["errores"].append(f"{clave}: {exc_q}")
 
         cur.close()
-    except Exception:
-        pass
+    except Exception as exc_c:
+        resumen["errores"].append(f"conexion: {exc_c}")
     finally:
         if conn is not None:
             try:
@@ -493,6 +495,10 @@ if menu == "Dashboard General":
         k3.metric("Empleados Activos", datos_dash["empleados"])
         k4.metric("Biométricos", datos_dash["dispositivos"])
         k5.metric("Marcaciones Hoy", datos_dash["marcaciones_hoy"])
+
+        if datos_dash["errores"]:
+            st.error("Errores en consultas del dashboard:\n" + "\n".join(datos_dash["errores"]))
+
         st.divider()
         st.caption("Seleccione una opción del menú lateral para gestionar catálogos, sincronizar relojes o auditar reportes.")
     else:

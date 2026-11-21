@@ -189,8 +189,8 @@ def _guardar_empleado_desde_reloj(
                 UPDATE empleados
                 SET nombres = %s
                 WHERE pin = %s
-                  AND (nombres IS NULL OR TRIM(nombres) = '' OR nombres LIKE 'SIN NOMBRE (%%');
-            """, (nombre_limpio, pin_maestro))
+                  AND COALESCE(TRIM(nombres), '') <> %s;
+            """, (nombre_limpio, pin_maestro, nombre_limpio))
     else:
         pin_maestro = pin_norm
         cur.execute("""
@@ -361,12 +361,12 @@ async def worker_respaldo_programado() -> None:
 
 
 # ==============================================================================
-# RÉPLICA AUTOMÁTICA A RAILWAY AL INICIAR EL SISTEMA
+# RÉPLICA A RAILWAY (Bajo demanda vía /api/replicar-bd o bucle opcional)
 # ==============================================================================
 def _iniciar_replicador_railway() -> None:
-    habilitado = os.getenv("RAILWAY_AUTO_REPLICA", "true").strip().lower()
-    if habilitado in ("0", "false", "no", "off"):
-        print("[RAILWAY AUTO-REPLICA] Deshabilitada por variable RAILWAY_AUTO_REPLICA.")
+    habilitado = os.getenv("RAILWAY_AUTO_REPLICA", "false").strip().lower()
+    if habilitado in ("0", "false", "no", "off", ""):
+        print("[RAILWAY AUTO-REPLICA] Deshabilitada por defecto (uso bajo demanda en /api/replicar-bd).")
         return
 
     from replicar_a_railway import ejecutar_replica_automatica_loop
@@ -421,6 +421,20 @@ def estado_sistema():
         "base_datos": settings.DB_NAME,
         "empresa_nombre": _resolver_nombre_empresa(),
     }
+
+
+@app.post("/api/replicar-bd")
+def replicar_bd_bajo_demanda():
+    try:
+        from replicar_a_railway import replicar_todo_a_railway
+        resumen = replicar_todo_a_railway()
+        return {
+            "status": "ok",
+            "mensaje": f"BD replicada ({resumen.get('marcaciones_procesadas', 0)} marcaciones revisadas).",
+            "resumen": resumen,
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 # ==============================================================================
