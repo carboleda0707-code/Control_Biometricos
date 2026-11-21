@@ -14,7 +14,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel
 
 BASE_DIR = Path(__file__).resolve().parent
-INDEX_FILE = BASE_DIR / "index.html"
+INDEX_FILE = BASE_DIR / "static" / "index.html"
 
 app = FastAPI(title="Panel Biométrico - Réplica Railway")
 
