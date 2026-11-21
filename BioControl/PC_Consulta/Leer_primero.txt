@@ -1,0 +1,6 @@
+PGHOST=172.16.4.25 (servidor Biometrico)
+PGPORT=5432 (puerto del servidor Biometrico)
+PGDATABASE=bananeras_db
+PGUSER=rrhhconsulta_ia  (primero tiene que ser dado de alta en el servidor (provisionar_readonly.exe ojo con su .env)
+PGPASSWORD=tu_clave_readonly
+PGSSLMODE=disable

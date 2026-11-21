@@ -1,0 +1,1097 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Panel de Consulta Inteligente - Control Biométrico</title>
+  <style>
+    :root {
+      --bg: #f8fafc;
+      --surface: #ffffff;
+      --surface-soft: #f1f5f9;
+      --info-bg: #eef5ff;
+      --info-text: #1d4ed8;
+      --border: #e2e8f0;
+      --text: #0f172a;
+      --muted: #64748b;
+      --accent: #be123c;
+      --accent-hover: #9f1239;
+      --ok-bg: #dcfce7;
+      --ok-text: #166534;
+      --warn-bg: #fef3c7;
+      --warn-text: #92400e;
+      --radius: 10px;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Inter, Arial, sans-serif;
+      color: var(--text);
+      background: var(--bg);
+      line-height: 1.5;
+    }
+
+    .container {
+      max-width: 1180px;
+      margin: 0 auto;
+      padding: 28px 20px 56px;
+    }
+
+    .welcome-hero {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-left: 5px solid var(--accent);
+      border-radius: var(--radius);
+      padding: 22px 24px;
+      margin-bottom: 24px;
+    }
+
+    .welcome-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 14px;
+      flex-wrap: wrap;
+    }
+
+    .welcome-title {
+      margin: 0 0 8px;
+      font-size: 1.42rem;
+      font-weight: 700;
+      letter-spacing: -0.01em;
+    }
+
+    .welcome-sub {
+      margin: 0;
+      font-size: 0.96rem;
+      color: var(--muted);
+    }
+
+    .empresa-tag {
+      display: inline-block;
+      margin-top: 10px;
+      padding: 5px 12px;
+      border-radius: 999px;
+      background: var(--info-bg);
+      color: var(--info-text);
+      font-size: 0.86rem;
+      font-weight: 600;
+    }
+
+    .mode-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 12px;
+      border-radius: 999px;
+      font-size: 0.82rem;
+      font-weight: 600;
+      border: 1px solid var(--border);
+      background: var(--surface-soft);
+      color: var(--text);
+      white-space: nowrap;
+    }
+
+    .mode-pill.cloud-on {
+      background: var(--ok-bg);
+      color: var(--ok-text);
+      border-color: #bbf7d0;
+    }
+
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px 22px;
+      margin-bottom: 22px;
+    }
+
+    .card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin-bottom: 14px;
+    }
+
+    h2 {
+      margin: 0;
+      font-size: 1.15rem;
+      font-weight: 700;
+    }
+
+    h3 {
+      margin: 0 0 6px;
+      font-size: 1.02rem;
+      font-weight: 700;
+    }
+
+    .desc {
+      margin: 4px 0 14px;
+      color: var(--muted);
+      font-size: 0.9rem;
+    }
+
+    .tabs-bar {
+      display: flex;
+      gap: 8px;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 10px;
+      margin-bottom: 18px;
+      flex-wrap: wrap;
+    }
+
+    .tab-btn {
+      appearance: none;
+      background: var(--surface-soft);
+      color: var(--muted);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 8px 14px;
+      font-size: 0.88rem;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    .tab-btn.active {
+      background: var(--info-bg);
+      color: var(--info-text);
+      border-color: #bfdbfe;
+    }
+
+    .tab-panel { display: none; }
+    .tab-panel.active { display: block; }
+
+    .grid-filters {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+      gap: 12px;
+      margin-bottom: 14px;
+    }
+
+    .field-group {
+      margin-bottom: 14px;
+    }
+
+    label {
+      display: block;
+      font-size: 0.86rem;
+      font-weight: 600;
+      margin-bottom: 6px;
+    }
+
+    select, input[type="text"], input[type="date"], textarea {
+      width: 100%;
+      padding: 9px 12px;
+      font-size: 0.9rem;
+      font-family: inherit;
+      color: var(--text);
+      background: var(--surface-soft);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      outline: none;
+    }
+
+    select:focus, input:focus, textarea:focus {
+      border-color: #94a3b8;
+      background: #ffffff;
+    }
+
+    textarea { resize: vertical; }
+
+    .btn {
+      appearance: none;
+      border-radius: 8px;
+      padding: 9px 15px;
+      font-size: 0.88rem;
+      font-weight: 600;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      border: 1px solid transparent;
+      transition: background 0.15s, opacity 0.15s;
+    }
+
+    .btn:disabled {
+      opacity: 0.55;
+      cursor: not-allowed;
+    }
+
+    .btn-primary {
+      background: var(--accent);
+      color: #ffffff;
+    }
+
+    .btn-primary:hover:not(:disabled) {
+      background: var(--accent-hover);
+    }
+
+    .btn-secondary {
+      background: #ffffff;
+      color: var(--text);
+      border-color: var(--border);
+    }
+
+    .btn-secondary:hover:not(:disabled) {
+      background: var(--surface-soft);
+    }
+
+    .table-wrap {
+      width: 100%;
+      overflow-x: auto;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.88rem;
+      text-align: left;
+    }
+
+    th {
+      color: var(--muted);
+      font-weight: 600;
+      padding: 10px 14px;
+      border-bottom: 1px solid var(--border);
+      background: var(--surface-soft);
+      white-space: nowrap;
+    }
+
+    td {
+      padding: 10px 14px;
+      border-bottom: 1px solid #f1f5f9;
+      white-space: nowrap;
+    }
+
+    tr:last-child td { border-bottom: none; }
+
+    .badge-activo {
+      display: inline-block;
+      padding: 3px 9px;
+      border-radius: 999px;
+      font-size: 0.78rem;
+      font-weight: 700;
+      background: var(--ok-bg);
+      color: var(--ok-text);
+    }
+
+    .badge-warn {
+      display: inline-block;
+      padding: 3px 9px;
+      border-radius: 999px;
+      font-size: 0.78rem;
+      font-weight: 700;
+      background: var(--warn-bg);
+      color: var(--warn-text);
+    }
+
+    .pager {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+      margin-top: 10px;
+      flex-wrap: wrap;
+    }
+
+    .actions-row {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      flex-wrap: wrap;
+      margin-bottom: 12px;
+    }
+
+    .respuesta-claude {
+      display: none;
+      margin-top: 16px;
+      padding: 16px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--surface-soft);
+      white-space: pre-wrap;
+      font-size: 0.93rem;
+      line-height: 1.55;
+    }
+
+    .meta-line {
+      font-size: 0.86rem;
+      color: var(--muted);
+    }
+
+    @media (max-width: 640px) {
+      .container { padding: 16px 12px 40px; }
+      .welcome-hero { padding: 16px; }
+      .welcome-title { font-size: 1.2rem; }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <!-- CABECERA DE BIENVENIDA -->
+    <header class="welcome-hero">
+      <div class="welcome-top">
+        <div>
+          <h1 class="welcome-title">
+            Panel de consulta Inteligente utilizando IA Claude Code conectada a la base de datos del servidor de Marcaciones
+          </h1>
+          <p class="welcome-sub">
+            Empresa: <strong id="nombre-empresa">Cargando...</strong>
+          </p>
+          <span class="empresa-tag" id="tag-empresa">Servidor de Marcaciones</span>
+        </div>
+        <div id="badge-modo-sistema" class="mode-pill">☁️ Réplica Nube</div>
+      </div>
+    </header>
+
+    <!-- CONSULTA INTELIGENTE CON CLAUDE -->
+    <section class="card">
+      <div class="card-header">
+        <h2>🤖 Consulta Inteligente (IA Claude)</h2>
+      </div>
+      <p class="desc">Escribe tu consulta sobre asistencia, marcaciones, haciendas o personal registrado en la base de datos.</p>
+
+      <div class="field-group">
+        <label for="claude-prompt-input">Prompt de consulta</label>
+        <textarea
+          id="claude-prompt-input"
+          rows="4"
+          placeholder="Ej. Muéstrame el resumen de marcaciones de hoy por hacienda y quiénes marcaron en comedor..."
+        ></textarea>
+      </div>
+
+      <div style="display:flex; gap:12px; align-items:center; flex-wrap:wrap;">
+        <button type="button" class="btn btn-primary" id="btn-enviar-claude">✨ Consultar con Claude</button>
+        <span class="meta-line" id="claude-prompt-estado"></span>
+      </div>
+
+      <div id="claude-respuesta-box" class="respuesta-claude"></div>
+    </section>
+
+    <!-- REPORTES Y AUDITORÍA (MISMA ESTRUCTURA DE REPORTES.PY) -->
+    <section class="card">
+      <div class="card-header">
+        <div>
+          <h2>📊 Reportes y Auditoría</h2>
+          <p class="desc" style="margin:4px 0 0;">Generación de reportes detallados de personal, marcaciones e inconsistencias.</p>
+        </div>
+      </div>
+
+      <div class="tabs-bar" role="tablist">
+        <button type="button" class="tab-btn active" data-tab="tab-emps">Empleados por Área / Hacienda</button>
+        <button type="button" class="tab-btn" data-tab="tab-marc">Marcaciones (Asistencia / Comedor)</button>
+        <button type="button" class="tab-btn" data-tab="tab-inc">Inconsistencias y Ausencias</button>
+      </div>
+
+      <!-- PESTAÑA 1: EMPLEADOS POR ÁREA / HACIENDA -->
+      <div id="tab-emps" class="tab-panel active">
+        <h3>Filtrar Personal y Autorizaciones</h3>
+        <div class="grid-filters">
+          <div>
+            <label for="emp-comp">Empresa:</label>
+            <select id="emp-comp"><option value="">Todas las empresas</option></select>
+          </div>
+          <div>
+            <label for="emp-hac">Hacienda / Localidad:</label>
+            <select id="emp-hac"><option value="">Todas las haciendas</option></select>
+          </div>
+          <div>
+            <label for="emp-ubic">Ubicación del biométrico:</label>
+            <select id="emp-ubic"><option value="">Todas las ubicaciones</option></select>
+          </div>
+          <div>
+            <label for="emp-area">Área / Localidad:</label>
+            <select id="emp-area"><option value="">Todas las áreas</option></select>
+          </div>
+          <div>
+            <label for="emp-cedula">Buscar por Cédula / PIN:</label>
+            <input type="text" id="emp-cedula" placeholder="Ej: 0928..." />
+          </div>
+        </div>
+        <div class="actions-row">
+          <button type="button" class="btn btn-secondary" id="btn-buscar-emps">🔍 Filtrar Personal</button>
+          <span class="meta-line" id="emp-meta"></span>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Cédula / PIN</th>
+                <th>Apellidos y Nombres</th>
+                <th>Área / Localidad</th>
+                <th>Activo</th>
+                <th>Haciendas Autorizadas</th>
+              </tr>
+            </thead>
+            <tbody id="tbody-rep-emps">
+              <tr><td colspan="5">Usa los filtros para consultar el personal.</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="pager" id="pager-emps"></div>
+      </div>
+
+      <!-- PESTAÑA 2: MARCACIONES -->
+      <div id="tab-marc" class="tab-panel">
+        <h3>Auditoría de Marcaciones (Empaque vs Comedor)</h3>
+        <div class="grid-filters">
+          <div>
+            <label for="marc-f-ini">Fecha Desde:</label>
+            <input type="date" id="marc-f-ini" />
+          </div>
+          <div>
+            <label for="marc-f-fin">Fecha Hasta:</label>
+            <input type="date" id="marc-f-fin" />
+          </div>
+          <div>
+            <label for="marc-hac">Hacienda Ubicación:</label>
+            <select id="marc-hac"><option value="">Todas las haciendas</option></select>
+          </div>
+          <div>
+            <label for="marc-rol">Rol del Dispositivo:</label>
+            <select id="marc-rol">
+              <option value="">Todos los roles</option>
+              <option value="EMPAQUE">EMPAQUE</option>
+              <option value="COMEDOR">COMEDOR</option>
+              <option value="PALETIZADO">PALETIZADO</option>
+              <option value="OFICINA">OFICINA</option>
+              <option value="GARITA">GARITA</option>
+            </select>
+          </div>
+          <div>
+            <label for="marc-cedula">Cédula / PIN específico (Opcional):</label>
+            <input type="text" id="marc-cedula" placeholder="Ej: 0912345678" />
+          </div>
+          <div>
+            <label for="marc-area">Área del Colaborador:</label>
+            <select id="marc-area"><option value="">Todas las áreas</option></select>
+          </div>
+        </div>
+        <div class="actions-row">
+          <button type="button" class="btn btn-secondary" id="btn-buscar-marc">🔍 Consultar Marcaciones</button>
+          <span class="meta-line" id="marc-meta"></span>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Fecha y Hora</th>
+                <th>Cédula / PIN</th>
+                <th>Colaborador</th>
+                <th>Área de Trabajo</th>
+                <th>Reloj Biométrico</th>
+                <th>Rol</th>
+                <th>Hacienda Ubicación</th>
+                <th>Estado</th>
+              </tr>
+            </thead>
+            <tbody id="tbody-rep-marc">
+              <tr><td colspan="8">Selecciona un rango de fechas y consulta marcaciones.</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="pager" id="pager-marc"></div>
+      </div>
+
+      <!-- PESTAÑA 3: INCONSISTENCIAS Y AUSENCIAS -->
+      <div id="tab-inc" class="tab-panel">
+        <h3>Inconsistencias, Marcaciones Sin Registro y Ausencias</h3>
+        <p class="desc">Detecta PINs desconocidos, marcaciones impares (falta entrada o salida) y colaboradores activos sin marcación.</p>
+        <div class="grid-filters">
+          <div>
+            <label for="inc-f-ini">Fecha Desde:</label>
+            <input type="date" id="inc-f-ini" />
+          </div>
+          <div>
+            <label for="inc-f-fin">Fecha Hasta:</label>
+            <input type="date" id="inc-f-fin" />
+          </div>
+          <div>
+            <label for="inc-tipo">Tipo de incidencia:</label>
+            <select id="inc-tipo">
+              <option value="Todas las incidencias">Todas las incidencias</option>
+              <option value="Marcación sin registro (PIN desconocido)">Marcación sin registro (PIN desconocido)</option>
+              <option value="Marcación impar (falta entrada o salida)">Marcación impar (falta entrada o salida)</option>
+              <option value="Activo sin marcación">Activo sin marcación</option>
+            </select>
+          </div>
+          <div>
+            <label for="inc-hac">Hacienda:</label>
+            <select id="inc-hac"><option value="">Todas las haciendas</option></select>
+          </div>
+          <div>
+            <label for="inc-area">Área:</label>
+            <select id="inc-area"><option value="">Todas las áreas</option></select>
+          </div>
+        </div>
+        <div class="actions-row">
+          <button type="button" class="btn btn-secondary" id="btn-buscar-inc">🔍 Analizar Incidencias</button>
+          <button type="button" class="btn btn-secondary" id="btn-export-inc-csv" disabled>⬇️ Descargar Inconsistencias (CSV)</button>
+          <span class="meta-line" id="inc-meta"></span>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Fecha</th>
+                <th>PIN / Cédula</th>
+                <th>Colaborador</th>
+                <th>Hacienda</th>
+                <th>Área</th>
+                <th>Dispositivo / SN</th>
+                <th>Total Marcas</th>
+                <th>Primera Marca</th>
+                <th>Última Marca</th>
+                <th>Diagnóstico / Incidencia</th>
+              </tr>
+            </thead>
+            <tbody id="tbody-rep-inc">
+              <tr><td colspan="10">Selecciona un rango de fechas para analizar incidencias.</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="pager" id="pager-inc"></div>
+      </div>
+    </section>
+
+    <!-- LISTADO DE BIOMÉTRICOS ACTIVOS -->
+    <section class="card">
+      <div class="card-header">
+        <h2>🖨️ Biométricos Activos (<span id="contador-activos">0</span>)</h2>
+        <button type="button" class="btn btn-secondary" id="btn-refrescar-activos">🔄 Actualizar</button>
+      </div>
+
+      <div class="field-group" style="max-width: 380px;">
+        <label for="filtro-hacienda-activos">Filtrar por Hacienda Empacadora:</label>
+        <select id="filtro-hacienda-activos">
+          <option value="">Todas las haciendas</option>
+        </select>
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Estado</th>
+              <th>Número de Serie (SN)</th>
+              <th>Nombre / Alias</th>
+              <th>Hacienda Empacadora</th>
+              <th>Área Física</th>
+              <th>Conexión</th>
+              <th>Última Conexión Activa</th>
+            </tr>
+          </thead>
+          <tbody id="tbody-biometricos-activos">
+            <tr><td colspan="7">Cargando biométricos activos...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </div>
+
+  <script>
+    const PAGE_SIZE = 10;
+    let pushHeartbeatSegundos = 300;
+    let companias = [];
+    let empacadoras = [];
+    let dispositivos = [];
+    let areasDisponibles = [];
+
+    const stateReportes = {
+      emps: { rows: [], page: 1 },
+      marc: { rows: [], page: 1 },
+      inc:  { rows: [], page: 1 }
+    };
+
+    function hoyISO() {
+      const d = new Date();
+      const offset = d.getTimezoneOffset();
+      const local = new Date(d.getTime() - offset * 60000);
+      return local.toISOString().slice(0, 10);
+    }
+
+    function escapeHtml(val) {
+      return String(val ?? "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;");
+    }
+
+    function estaActivoDispositivo(d) {
+      if (typeof d.conectado === "boolean") return d.conectado;
+      if (typeof d.online === "boolean") return d.online;
+
+      const modo = String(d.tipo_conexion || "PUSH_ADMS").trim().toUpperCase();
+      if (modo === "PUSH_ADMS") {
+        if (!d.ultima_conexion) return false;
+        const ts = Date.parse(String(d.ultima_conexion).replace(" ", "T"));
+        if (Number.isNaN(ts)) return false;
+        return ((Date.now() - ts) / 1000) <= pushHeartbeatSegundos;
+      }
+      return Boolean(d.ip_address && String(d.ip_address).trim() !== "");
+    }
+
+    async function cargarEstadoYEmpresa() {
+      try {
+        const res = await fetch("/api/estado-sistema");
+        if (!res.ok) return;
+        const info = await res.json();
+
+        if (typeof info.push_heartbeat_segundos === "number" && info.push_heartbeat_segundos > 0) {
+          pushHeartbeatSegundos = info.push_heartbeat_segundos;
+        }
+
+        const empresa = (info.empresa_nombre || "").trim();
+        document.getElementById("nombre-empresa").textContent = empresa || "No configurada";
+        document.getElementById("tag-empresa").textContent = empresa
+          ? `Empresa: ${empresa}`
+          : "Servidor de Marcaciones";
+
+        const badge = document.getElementById("badge-modo-sistema");
+        if (info.railway_enabled) {
+          badge.textContent = "☁️ Conectado a Réplica Nube";
+          badge.classList.add("cloud-on");
+        } else {
+          badge.textContent = "🖥️ Servidor de Marcaciones";
+          badge.classList.remove("cloud-on");
+        }
+      } catch (_) {}
+    }
+
+    function poblarSelectsReportes() {
+      const selComp = document.getElementById("emp-comp");
+      selComp.innerHTML = '<option value="">Todas las empresas</option>';
+      companias.forEach(c => selComp.add(new Option(c.nombre, c.id)));
+
+      const compFiltro = selComp.value;
+      const hacFiltradas = compFiltro
+        ? empacadoras.filter(e => String(e.compania_id) === String(compFiltro))
+        : empacadoras;
+
+      ["emp-hac", "marc-hac", "inc-hac"].forEach(id => {
+        const sel = document.getElementById(id);
+        const prev = sel.value;
+        sel.innerHTML = '<option value="">Todas las haciendas</option>';
+        hacFiltradas.forEach(e => sel.add(new Option(`[${e.codigo}] ${e.nombre}`, e.id)));
+        if (prev && [...sel.options].some(o => o.value === prev)) sel.value = prev;
+      });
+
+      const selUbic = document.getElementById("emp-ubic");
+      const prevUbic = selUbic.value;
+      const hacEmpFiltro = document.getElementById("emp-hac").value;
+      selUbic.innerHTML = '<option value="">Todas las ubicaciones</option>';
+
+      const dispFiltrados = hacEmpFiltro
+        ? dispositivos.filter(d => String(d.empacadora_id) === String(hacEmpFiltro))
+        : dispositivos;
+
+      dispFiltrados.forEach(d => {
+        const rolVal = String(d.rol || "").trim().toUpperCase();
+        const pref = d.empacadora_codigo ? `[${d.empacadora_codigo}] ` : "";
+        const lbl = `${pref}${d.empacadora_nombre || "Sin Hacienda"} + ${rolVal ? rolVal.charAt(0) + rolVal.slice(1).toLowerCase() : ""} (${d.nombre || d.sn})`;
+        selUbic.add(new Option(lbl, JSON.stringify({
+          modo: "DISPOSITIVO",
+          empacadora_id: d.empacadora_id,
+          rol: rolVal,
+          sn: d.sn
+        })));
+      });
+
+      ["COMEDOR", "EMPAQUE", "PALETIZADO", "OFICINA", "GARITA"].forEach(rol => {
+        selUbic.add(new Option(
+          `Área / Localidad: ${rol.charAt(0) + rol.slice(1).toLowerCase()}`,
+          JSON.stringify({
+            modo: "ROL",
+            empacadora_id: hacEmpFiltro || null,
+            rol,
+            sn: null
+          })
+        ));
+      });
+      if (prevUbic && [...selUbic.options].some(o => o.value === prevUbic)) selUbic.value = prevUbic;
+
+      ["emp-area", "marc-area", "inc-area"].forEach(id => {
+        const sel = document.getElementById(id);
+        const prev = sel.value;
+        sel.innerHTML = '<option value="">Todas las áreas</option>';
+        areasDisponibles.forEach(a => sel.add(new Option(a, a)));
+        if (prev && [...sel.options].some(o => o.value === prev)) sel.value = prev;
+      });
+    }
+
+    function renderFiltroHaciendasActivos() {
+      const sel = document.getElementById("filtro-hacienda-activos");
+      const prev = sel.value;
+      sel.innerHTML = '<option value="">Todas las haciendas</option>';
+      empacadoras.forEach(e => {
+        sel.add(new Option(`[${e.codigo}] ${e.nombre}`, e.id));
+      });
+      if (prev) sel.value = prev;
+    }
+
+    function renderBiometricosActivos() {
+      const filtroId = document.getElementById("filtro-hacienda-activos").value;
+      const tbody = document.getElementById("tbody-biometricos-activos");
+      const contador = document.getElementById("contador-activos");
+
+      const activos = dispositivos.filter(d => {
+        if (!estaActivoDispositivo(d)) return false;
+        if (filtroId && String(d.empacadora_id) !== String(filtroId)) return false;
+        return true;
+      });
+
+      contador.textContent = activos.length;
+
+      if (!activos.length) {
+        tbody.innerHTML = `<tr><td colspan="7">No hay biométricos activos en este momento.</td></tr>`;
+        return;
+      }
+
+      tbody.innerHTML = activos.map(d => `
+        <tr>
+          <td><span class="badge-activo">ACTIVO</span></td>
+          <td>${escapeHtml(d.sn)}</td>
+          <td>${escapeHtml(d.nombre || "")}</td>
+          <td>${d.empacadora_codigo ? `[${escapeHtml(d.empacadora_codigo)}] ` : ""}${escapeHtml(d.empacadora_nombre || "")}</td>
+          <td>${escapeHtml(d.rol || "")}</td>
+          <td>${escapeHtml(d.tipo_conexion || "PUSH_ADMS")}</td>
+          <td>${escapeHtml(d.ultima_conexion || "-")}</td>
+        </tr>
+      `).join("");
+    }
+
+    function renderPaginador(key, onPageChange) {
+      const stData = stateReportes[key];
+      const pager = document.getElementById(`pager-${key}`);
+      const total = stData.rows.length;
+      if (!total) {
+        pager.innerHTML = "";
+        return;
+      }
+
+      const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+      stData.page = Math.min(Math.max(1, stData.page), totalPages);
+      const start = (stData.page - 1) * PAGE_SIZE;
+      const end = Math.min(start + PAGE_SIZE, total);
+
+      pager.innerHTML = `
+        <button type="button" class="btn btn-secondary" data-dir="prev" ${stData.page <= 1 ? "disabled" : ""}>◀</button>
+        <span class="meta-line">Mostrando ${start + 1}–${end} de ${total} | Página ${stData.page} de ${totalPages}</span>
+        <button type="button" class="btn btn-secondary" data-dir="next" ${stData.page >= totalPages ? "disabled" : ""}>▶</button>
+      `;
+
+      pager.querySelectorAll("button").forEach(btn => {
+        btn.addEventListener("click", () => {
+          stData.page += btn.dataset.dir === "next" ? 1 : -1;
+          onPageChange();
+        });
+      });
+    }
+
+    function renderTablaEmpleados() {
+      const { rows, page } = stateReportes.emps;
+      const tbody = document.getElementById("tbody-rep-emps");
+      const meta = document.getElementById("emp-meta");
+
+      if (!rows.length) {
+        meta.textContent = "";
+        tbody.innerHTML = `<tr><td colspan="5">No se encontraron registros de empleados para los filtros seleccionados.</td></tr>`;
+        renderPaginador("emps", renderTablaEmpleados);
+        return;
+      }
+
+      meta.textContent = `Total colaboradores encontrados: ${rows.length} (máximo ${PAGE_SIZE} por página)`;
+      const slice = rows.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+      tbody.innerHTML = slice.map(r => `
+        <tr>
+          <td>${escapeHtml(r.cedula)}</td>
+          <td>${escapeHtml(r.nombres)}</td>
+          <td>${escapeHtml(r.area || "Sin área")}</td>
+          <td>${r.activo ? '<span class="badge-activo">Sí</span>' : '<span class="badge-warn">No</span>'}</td>
+          <td>${escapeHtml(r.haciendas_autorizadas || "-")}</td>
+        </tr>
+      `).join("");
+
+      renderPaginador("emps", renderTablaEmpleados);
+    }
+
+    function renderTablaMarcaciones() {
+      const { rows, page } = stateReportes.marc;
+      const tbody = document.getElementById("tbody-rep-marc");
+      const meta = document.getElementById("marc-meta");
+
+      if (!rows.length) {
+        meta.textContent = "";
+        tbody.innerHTML = `<tr><td colspan="8">No se registran marcaciones en el rango de fechas y filtros seleccionados.</td></tr>`;
+        renderPaginador("marc", renderTablaMarcaciones);
+        return;
+      }
+
+      meta.textContent = `Marcaciones encontradas: ${rows.length}`;
+      const slice = rows.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+      tbody.innerHTML = slice.map(r => `
+        <tr>
+          <td>${escapeHtml(r.fecha_hora)}</td>
+          <td>${escapeHtml(r.cedula)}</td>
+          <td>${escapeHtml(r.empleado)}</td>
+          <td>${escapeHtml(r.area_empleado || "N/D")}</td>
+          <td>${escapeHtml(r.dispositivo || "")}</td>
+          <td>${escapeHtml(r.rol_dispositivo || "")}</td>
+          <td>${escapeHtml(r.hacienda_ubicacion || "")}</td>
+          <td>${escapeHtml(r.estado_verificacion ?? "")}</td>
+        </tr>
+      `).join("");
+
+      renderPaginador("marc", renderTablaMarcaciones);
+    }
+
+    function renderTablaInconsistencias() {
+      const { rows, page } = stateReportes.inc;
+      const tbody = document.getElementById("tbody-rep-inc");
+      const meta = document.getElementById("inc-meta");
+      const btnCsv = document.getElementById("btn-export-inc-csv");
+
+      btnCsv.disabled = rows.length === 0;
+
+      if (!rows.length) {
+        meta.textContent = "";
+        tbody.innerHTML = `<tr><td colspan="10">No se encontraron incidencias para el rango y filtros seleccionados.</td></tr>`;
+        renderPaginador("inc", renderTablaInconsistencias);
+        return;
+      }
+
+      meta.textContent = `Incidencias encontradas: ${rows.length}`;
+      const slice = rows.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+      tbody.innerHTML = slice.map(r => `
+        <tr>
+          <td>${escapeHtml(r.fecha)}</td>
+          <td>${escapeHtml(r.pin)}</td>
+          <td>${escapeHtml(r.colaborador)}</td>
+          <td>${escapeHtml(r.hacienda)}</td>
+          <td>${escapeHtml(r.area)}</td>
+          <td>${escapeHtml(r.dispositivo_sn)}</td>
+          <td>${escapeHtml(r.total_marcas)}</td>
+          <td>${escapeHtml(r.primera_marca || "-")}</td>
+          <td>${escapeHtml(r.ultima_marca || "-")}</td>
+          <td><span class="badge-warn">${escapeHtml(r.incidencia)}</span></td>
+        </tr>
+      `).join("");
+
+      renderPaginador("inc", renderTablaInconsistencias);
+    }
+
+    function exportarInconsistenciasCSV() {
+      const rows = stateReportes.inc.rows;
+      if (!rows.length) return;
+      const headers = [
+        "fecha", "pin", "colaborador", "hacienda", "area",
+        "dispositivo_sn", "total_marcas", "primera_marca", "ultima_marca", "incidencia"
+      ];
+      const lines = [
+        headers.join(","),
+        ...rows.map(r => headers.map(h => `"${String(r[h] ?? "").replace(/"/g, '""')}"`).join(","))
+      ];
+      const blob = new Blob(["\uFEFF" + lines.join("\n")], { type: "text/csv;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      const fIni = document.getElementById("inc-f-ini").value || hoyISO();
+      const fFin = document.getElementById("inc-f-fin").value || hoyISO();
+      a.href = url;
+      a.download = `inconsistencias_${fIni}_${fFin}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+
+    async function consultarReporte(endpoint, paramsObj, key, renderFn, metaId, colspan) {
+      const meta = document.getElementById(metaId);
+      const tbody = document.getElementById(`tbody-rep-${key}`);
+      meta.textContent = "Consultando...";
+      tbody.innerHTML = `<tr><td colspan="${colspan}">Cargando datos...</td></tr>`;
+
+      try {
+        const qs = new URLSearchParams();
+        Object.entries(paramsObj).forEach(([k, v]) => {
+          if (v !== null && v !== undefined && String(v).trim() !== "") {
+            qs.set(k, String(v));
+          }
+        });
+        const res = await fetch(`${endpoint}?${qs.toString()}`);
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({}));
+          meta.textContent = errData.detail || "No se pudo obtener el reporte.";
+          tbody.innerHTML = `<tr><td colspan="${colspan}">Error al cargar el reporte.</td></tr>`;
+          return;
+        }
+        const data = await res.json();
+        stateReportes[key].rows = Array.isArray(data) ? data : (data.items || []);
+        stateReportes[key].page = 1;
+        renderFn();
+      } catch (err) {
+        meta.textContent = "Error de conexión: " + err.message;
+        tbody.innerHTML = `<tr><td colspan="${colspan}">No se pudo conectar con el servidor.</td></tr>`;
+      }
+    }
+
+    async function cargarDatos() {
+      await cargarEstadoYEmpresa();
+      try {
+        const [resComp, resEmp, resDisp, resAreas] = await Promise.all([
+          fetch("/api/companias").catch(() => null),
+          fetch("/api/empacadoras"),
+          fetch("/api/dispositivos"),
+          fetch("/api/areas").catch(() => null)
+        ]);
+        if (resComp && resComp.ok) companias = await resComp.json();
+        if (resEmp && resEmp.ok) empacadoras = await resEmp.json();
+        if (resDisp && resDisp.ok) dispositivos = await resDisp.json();
+        if (resAreas && resAreas.ok) {
+          const rawAreas = await resAreas.json();
+          areasDisponibles = Array.isArray(rawAreas)
+            ? rawAreas.map(x => typeof x === "string" ? x : (x.area || x.nombre || "")).filter(Boolean)
+            : [];
+        }
+        poblarSelectsReportes();
+        renderFiltroHaciendasActivos();
+        renderBiometricosActivos();
+      } catch (_) {
+        document.getElementById("tbody-biometricos-activos").innerHTML =
+          `<tr><td colspan="7">No se pudo cargar el listado de biométricos.</td></tr>`;
+      }
+    }
+
+    // Pestañas de reportes
+    document.querySelectorAll(".tab-btn").forEach(btn => {
+      btn.addEventListener("click", () => {
+        document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active"));
+        document.querySelectorAll(".tab-panel").forEach(p => p.classList.remove("active"));
+        btn.classList.add("active");
+        document.getElementById(btn.dataset.tab).classList.add("active");
+      });
+    });
+
+    // Filtros encadenados
+    document.getElementById("emp-comp").addEventListener("change", poblarSelectsReportes);
+    document.getElementById("emp-hac").addEventListener("change", poblarSelectsReportes);
+
+    // Eventos de reportes
+    document.getElementById("btn-buscar-emps").addEventListener("click", () => {
+      consultarReporte(
+        "/api/reportes/empleados",
+        {
+          compania_id: document.getElementById("emp-comp").value,
+          empacadora_id: document.getElementById("emp-hac").value,
+          ubicacion: document.getElementById("emp-ubic").value,
+          area: document.getElementById("emp-area").value,
+          cedula: document.getElementById("emp-cedula").value.trim()
+        },
+        "emps",
+        renderTablaEmpleados,
+        "emp-meta",
+        5
+      );
+    });
+
+    document.getElementById("btn-buscar-marc").addEventListener("click", () => {
+      const fIni = document.getElementById("marc-f-ini").value;
+      const fFin = document.getElementById("marc-f-fin").value;
+      if (fIni && fFin && fIni > fFin) {
+        document.getElementById("marc-meta").textContent = "La fecha 'Desde' no puede ser mayor que 'Hasta'.";
+        return;
+      }
+      consultarReporte(
+        "/api/reportes/marcaciones",
+        {
+          fecha_desde: fIni,
+          fecha_hasta: fFin,
+          empacadora_id: document.getElementById("marc-hac").value,
+          rol: document.getElementById("marc-rol").value,
+          cedula: document.getElementById("marc-cedula").value.trim(),
+          area: document.getElementById("marc-area").value
+        },
+        "marc",
+        renderTablaMarcaciones,
+        "marc-meta",
+        8
+      );
+    });
+
+    document.getElementById("btn-buscar-inc").addEventListener("click", () => {
+      const fIni = document.getElementById("inc-f-ini").value;
+      const fFin = document.getElementById("inc-f-fin").value;
+      if (fIni && fFin && fIni > fFin) {
+        document.getElementById("inc-meta").textContent = "La fecha 'Desde' no puede ser mayor que 'Hasta'.";
+        return;
+      }
+      consultarReporte(
+        "/api/reportes/inconsistencias",
+        {
+          fecha_desde: fIni,
+          fecha_hasta: fFin,
+          tipo_incidencia: document.getElementById("inc-tipo").value,
+          empacadora_id: document.getElementById("inc-hac").value,
+          area: document.getElementById("inc-area").value
+        },
+        "inc",
+        renderTablaInconsistencias,
+        "inc-meta",
+        10
+      );
+    });
+
+    document.getElementById("btn-export-inc-csv").addEventListener("click", exportarInconsistenciasCSV);
+    document.getElementById("btn-refrescar-activos").addEventListener("click", cargarDatos);
+    document.getElementById("filtro-hacienda-activos").addEventListener("change", renderBiometricosActivos);
+
+    const btnClaude = document.getElementById("btn-enviar-claude");
+    const inputClaude = document.getElementById("claude-prompt-input");
+    const estadoClaude = document.getElementById("claude-prompt-estado");
+    const cajaRespuestaClaude = document.getElementById("claude-respuesta-box");
+
+    btnClaude.addEventListener("click", async () => {
+      const mensaje = (inputClaude.value || "").trim();
+      if (!mensaje) {
+        estadoClaude.textContent = "Escribe una consulta antes de enviar.";
+        return;
+      }
+
+      btnClaude.disabled = true;
+      estadoClaude.textContent = "Consultando a Claude...";
+      cajaRespuestaClaude.style.display = "none";
+
+      try {
+        const res = await fetch("/api/chat", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ mensaje })
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          estadoClaude.textContent = data.detail || data.mensaje || "No se pudo procesar la consulta.";
+          return;
+        }
+        cajaRespuestaClaude.textContent = data.respuesta || "(Sin respuesta)";
+        cajaRespuestaClaude.style.display = "block";
+        estadoClaude.textContent = "Consulta completada.";
+      } catch (err) {
+        estadoClaude.textContent = "Error de conexión: " + err.message;
+      } finally {
+        btnClaude.disabled = false;
+      }
+    });
+
+    const hoy = hoyISO();
+    ["marc-f-ini", "marc-f-fin", "inc-f-ini", "inc-f-fin"].forEach(id => {
+      document.getElementById(id).value = hoy;
+    });
+
+    cargarDatos();
+  </script>
+</body>
+</html>

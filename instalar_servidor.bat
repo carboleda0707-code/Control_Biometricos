@@ -7,7 +7,7 @@ setlocal EnableDelayedExpansion
 cd /d "%~dp0"
 
 set "EXE_NAME=servidor_biometrico.exe"
-set "FW_PORT=8080"
+set "FW_PORT=8081"
 
 echo [0/4] Verificando permisos de Administrador...
 net session >nul 2>&1
@@ -38,7 +38,7 @@ if exist "config.ini" (
     echo.
     echo [SERVER]
     echo HOST = 0.0.0.0
-    echo PORT = 8080
+    echo PORT = 8081
     echo.
     echo [DATABASE]
     echo HOST = localhost
